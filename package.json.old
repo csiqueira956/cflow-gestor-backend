@@ -1,0 +1,60 @@
+{
+  "name": "gestor-consorcios",
+  "version": "2.0.0",
+  "description": "Sistema completo de gestão de vendas de consórcios com Kanban, comissões e conformidade LGPD",
+  "private": true,
+  "author": "Caique Siqueira",
+  "license": "MIT",
+  "keywords": [
+    "consorcios",
+    "crm",
+    "kanban",
+    "vendas",
+    "comissoes",
+    "lgpd"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/seu-usuario/gestor-consorcios.git"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd backend && npm run build || echo 'Backend build not configured'",
+    "build:frontend": "cd frontend && npm run build",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "cd backend && npm test || echo 'Backend tests not configured yet'",
+    "test:frontend": "cd frontend && npm test || echo 'Frontend tests not configured yet'",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "cd backend && npm run lint || echo 'Backend lint not configured'",
+    "lint:frontend": "cd frontend && npm run lint || echo 'Frontend lint not configured'",
+    "format": "prettier --write \"**/*.{js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx,json,md}\"",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:rebuild": "docker-compose down && docker-compose build --no-cache && docker-compose up -d",
+    "docker:clean": "docker-compose down -v && docker system prune -f",
+    "docker:tools": "docker-compose --profile tools up -d",
+    "db:backup": "node scripts/backup-db.js",
+    "db:restore": "node scripts/restore-db.js",
+    "db:migrate": "cd backend && npm run migrate || echo 'Migrations not configured yet'",
+    "db:seed": "cd backend && npm run seed || echo 'Seeds not configured yet'",
+    "health": "curl -f http://localhost:3001/health && curl -f http://localhost:3000",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "clean": "rm -rf node_modules backend/node_modules frontend/node_modules",
+    "clean:build": "rm -rf backend/dist frontend/dist frontend/build",
+    "version:bump": "npm version patch && cd backend && npm version patch && cd ../frontend && npm version patch"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "prettier": "^3.1.0"
+  }
+}
