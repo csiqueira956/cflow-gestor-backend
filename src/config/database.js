@@ -64,18 +64,19 @@ function convertPlaceholders(sql) {
 const pool = {
   // Método query padrão - retorna { rows }
   async query(text, params = []) {
+    // Converter ? para $1, $2... se necessário
+    const convertedText = text.includes('?') ? convertPlaceholders(text) : text;
+
     try {
-      // Converter ? para $1, $2... se necessário
-      const convertedText = text.includes('?') ? convertPlaceholders(text) : text;
       const result = await pgPool.query(convertedText, params);
       return { rows: result.rows, rowCount: result.rowCount };
     } catch (error) {
       console.error('❌ Erro na query:', error.message);
-      console.error('📝 Query completa:', convertedText || text);
+      console.error('📝 Query completa:', convertedText);
       console.error('📊 Params:', JSON.stringify(params));
       if (error.position) {
         console.error('🎯 Posição do erro:', error.position);
-        console.error('🔍 Trecho próximo ao erro:', (convertedText || text).substring(parseInt(error.position) - 50, parseInt(error.position) + 50));
+        console.error('🔍 Trecho próximo ao erro:', convertedText.substring(parseInt(error.position) - 50, parseInt(error.position) + 50));
       }
       throw error;
     }
