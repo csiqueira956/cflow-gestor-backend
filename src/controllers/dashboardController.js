@@ -26,7 +26,7 @@ export const estatisticasDashboard = async (req, res) => {
         SELECT
           e.id as equipe_id,
           e.nome as equipe_nome,
-          COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_vendido,
+          COALESCE(SUM(CAST(c.valor_carta AS NUMERIC)), 0) as total_vendido,
           COUNT(c.id) as total_vendas,
           COALESCE(
             (SELECT SUM(m.valor_meta)
@@ -50,7 +50,7 @@ export const estatisticasDashboard = async (req, res) => {
         SELECT
           e.id as equipe_id,
           e.nome as equipe_nome,
-          COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_vendido,
+          COALESCE(SUM(CAST(c.valor_carta AS NUMERIC)), 0) as total_vendido,
           COUNT(c.id) as total_vendas,
           COALESCE(
             (SELECT SUM(m.valor_meta)
@@ -74,7 +74,7 @@ export const estatisticasDashboard = async (req, res) => {
         SELECT
           e.id as equipe_id,
           e.nome as equipe_nome,
-          COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_vendido,
+          COALESCE(SUM(CAST(c.valor_carta AS NUMERIC)), 0) as total_vendido,
           COUNT(c.id) as total_vendas,
           COALESCE(
             (SELECT SUM(m.valor_meta)
@@ -159,7 +159,7 @@ export const estatisticasDashboard = async (req, res) => {
 
     // 7. KPI - Ticket Médio
     const ticketMedioQuery = await pool.query(`
-      SELECT AVG(CAST(valor_carta AS REAL)) as ticket_medio
+      SELECT AVG(CAST(valor_carta AS NUMERIC)) as ticket_medio
       FROM clientes
       WHERE etapa = 'fechado' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = ?
     `, [company_id]);
@@ -168,7 +168,7 @@ export const estatisticasDashboard = async (req, res) => {
     // 8. KPI - Pipeline Value (valor em negociação)
     const pipelineQuery = await pool.query(`
       SELECT
-        COALESCE(SUM(CAST(valor_carta AS REAL)), 0) as pipeline_negociacao,
+        COALESCE(SUM(CAST(valor_carta AS NUMERIC)), 0) as pipeline_negociacao,
         COUNT(*) as qtd_negociacao
       FROM clientes
       WHERE etapa = 'negociacao' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = ?
@@ -176,7 +176,7 @@ export const estatisticasDashboard = async (req, res) => {
 
     const pipelinePropostaQuery = await pool.query(`
       SELECT
-        COALESCE(SUM(CAST(valor_carta AS REAL)), 0) as pipeline_proposta,
+        COALESCE(SUM(CAST(valor_carta AS NUMERIC)), 0) as pipeline_proposta,
         COUNT(*) as qtd_proposta
       FROM clientes
       WHERE etapa = 'proposta_enviada' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = ?
@@ -202,7 +202,7 @@ export const estatisticasDashboard = async (req, res) => {
           u.id,
           u.nome,
           COUNT(c.id) as total_vendas,
-          COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_valor
+          COALESCE(SUM(CAST(c.valor_carta AS NUMERIC)), 0) as total_valor
         FROM usuarios u
         LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.company_id = ?
         WHERE u.id = ? AND u.company_id = ?
@@ -216,7 +216,7 @@ export const estatisticasDashboard = async (req, res) => {
           u.id,
           u.nome,
           COUNT(c.id) as total_vendas,
-          COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_valor
+          COALESCE(SUM(CAST(c.valor_carta AS NUMERIC)), 0) as total_valor
         FROM usuarios u
         LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.company_id = ?
         WHERE u.equipe_id = ? AND u.role = 'vendedor' AND u.company_id = ?
@@ -233,7 +233,7 @@ export const estatisticasDashboard = async (req, res) => {
           u.nome,
           e.nome as equipe_nome,
           COUNT(c.id) as total_vendas,
-          COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_valor
+          COALESCE(SUM(CAST(c.valor_carta AS NUMERIC)), 0) as total_valor
         FROM usuarios u
         LEFT JOIN equipes e ON u.equipe_id = e.id AND e.company_id = ?
         LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.company_id = ?
