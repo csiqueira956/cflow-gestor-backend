@@ -5,6 +5,10 @@ dotenv.config();
 
 const { Pool } = pg;
 
+// Debug: mostrar qual DATABASE_URL está sendo usada (parcial para segurança)
+const dbUrl = process.env.DATABASE_URL || '';
+console.log('🔍 DATABASE_URL configurada:', dbUrl.replace(/:[^:@]+@/, ':***@'));
+
 // Configuração do pool PostgreSQL para Supabase
 const pgPool = new Pool({
   connectionString: process.env.DATABASE_URL,
