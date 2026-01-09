@@ -5,20 +5,36 @@ dotenv.config();
 
 const { Pool } = pg;
 
-// Debug: mostrar qual DATABASE_URL está sendo usada (parcial para segurança)
-const dbUrl = process.env.DATABASE_URL || '';
-console.log('🔍 DATABASE_URL configurada:', dbUrl.replace(/:[^:@]+@/, ':***@'));
+// Debug: mostrar configuração
+console.log('🔍 Configuração do banco:');
+console.log('  PGHOST:', process.env.PGHOST || '(usando DATABASE_URL)');
+console.log('  PGUSER:', process.env.PGUSER || '(usando DATABASE_URL)');
 
 // Configuração do pool PostgreSQL para Supabase (otimizado para serverless)
-const pgPool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+const poolConfig = {
   ssl: {
     rejectUnauthorized: false
   },
-  max: 5, // Menos conexões para serverless
+  max: 3, // Menos conexões para serverless
   idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 30000, // 30 segundos de timeout
-});
+  connectionTimeoutMillis: 60000, // 60 segundos de timeout
+};
+
+// Usar variáveis PG separadas se disponíveis, senão usar DATABASE_URL
+if (process.env.PGHOST) {
+  poolConfig.host = process.env.PGHOST;
+  poolConfig.port = parseInt(process.env.PGPORT || '5432');
+  poolConfig.database = process.env.PGDATABASE || 'postgres';
+  poolConfig.user = process.env.PGUSER;
+  poolConfig.password = process.env.PGPASSWORD;
+  console.log('  Modo: Variáveis PG separadas');
+} else {
+  poolConfig.connectionString = process.env.DATABASE_URL;
+  console.log('  Modo: DATABASE_URL');
+  console.log('  URL:', (process.env.DATABASE_URL || '').replace(/:[^:@]+@/, ':***@'));
+}
+
+const pgPool = new Pool(poolConfig);
 
 // Log de conexão
 pgPool.on('connect', () => {
