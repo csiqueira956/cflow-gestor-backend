@@ -39,7 +39,7 @@ export const estatisticasDashboard = async (req, res) => {
           ) as meta_equipe
         FROM equipes e
         LEFT JOIN usuarios u ON u.equipe_id = e.id AND u.company_id = ?
-        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.valor_carta != '' AND c.company_id = ?
+        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.company_id = ?
         WHERE e.id = ? AND e.company_id = ?
         GROUP BY e.id, e.nome
         ORDER BY total_vendido DESC
@@ -63,7 +63,7 @@ export const estatisticasDashboard = async (req, res) => {
           ) as meta_equipe
         FROM equipes e
         LEFT JOIN usuarios u ON u.equipe_id = e.id AND u.company_id = ?
-        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.valor_carta != '' AND c.company_id = ?
+        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.company_id = ?
         WHERE e.id = ? AND e.company_id = ?
         GROUP BY e.id, e.nome
         ORDER BY total_vendido DESC
@@ -87,7 +87,7 @@ export const estatisticasDashboard = async (req, res) => {
           ) as meta_equipe
         FROM equipes e
         LEFT JOIN usuarios u ON u.equipe_id = e.id AND u.company_id = ?
-        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.valor_carta != '' AND c.company_id = ?
+        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.company_id = ?
         WHERE e.company_id = ?
         GROUP BY e.id, e.nome
         ORDER BY total_vendido DESC
@@ -165,7 +165,7 @@ export const estatisticasDashboard = async (req, res) => {
     const ticketMedioQuery = await pool.query(`
       SELECT AVG(CAST(NULLIF(valor_carta, '') AS NUMERIC)) as ticket_medio
       FROM clientes
-      WHERE etapa = 'fechado' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = ?
+      WHERE etapa = 'fechado' AND valor_carta IS NOT NULL AND company_id = ?
     `, [company_id]);
     const ticketMedio = parseFloat(ticketMedioQuery.rows[0]?.ticket_medio) || 0;
 
@@ -175,7 +175,7 @@ export const estatisticasDashboard = async (req, res) => {
         COALESCE(SUM(CAST(NULLIF(valor_carta, '') AS NUMERIC)), 0) as pipeline_negociacao,
         COUNT(*) as qtd_negociacao
       FROM clientes
-      WHERE etapa = 'negociacao' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = ?
+      WHERE etapa = 'negociacao' AND valor_carta IS NOT NULL AND company_id = ?
     `, [company_id]);
 
     const pipelinePropostaQuery = await pool.query(`
@@ -183,7 +183,7 @@ export const estatisticasDashboard = async (req, res) => {
         COALESCE(SUM(CAST(NULLIF(valor_carta, '') AS NUMERIC)), 0) as pipeline_proposta,
         COUNT(*) as qtd_proposta
       FROM clientes
-      WHERE etapa = 'proposta_enviada' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = ?
+      WHERE etapa = 'proposta_enviada' AND valor_carta IS NOT NULL AND company_id = ?
     `, [company_id]);
 
     const pipelineValue = {
@@ -208,7 +208,7 @@ export const estatisticasDashboard = async (req, res) => {
           COUNT(c.id) as total_vendas,
           COALESCE(SUM(CAST(NULLIF(c.valor_carta, '') AS NUMERIC)), 0) as total_valor
         FROM usuarios u
-        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.valor_carta != '' AND c.company_id = ?
+        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.company_id = ?
         WHERE u.id = ? AND u.company_id = ?
         GROUP BY u.id, u.nome
       `;
@@ -222,7 +222,7 @@ export const estatisticasDashboard = async (req, res) => {
           COUNT(c.id) as total_vendas,
           COALESCE(SUM(CAST(NULLIF(c.valor_carta, '') AS NUMERIC)), 0) as total_valor
         FROM usuarios u
-        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.valor_carta != '' AND c.company_id = ?
+        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.company_id = ?
         WHERE u.equipe_id = ? AND u.role = 'vendedor' AND u.company_id = ?
         GROUP BY u.id, u.nome
         ORDER BY total_valor DESC
@@ -240,7 +240,7 @@ export const estatisticasDashboard = async (req, res) => {
           COALESCE(SUM(CAST(NULLIF(c.valor_carta, '') AS NUMERIC)), 0) as total_valor
         FROM usuarios u
         LEFT JOIN equipes e ON u.equipe_id = e.id AND e.company_id = ?
-        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.valor_carta != '' AND c.company_id = ?
+        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.valor_carta IS NOT NULL AND c.company_id = ?
         WHERE u.role = 'vendedor' AND u.company_id = ?
         GROUP BY u.id, u.nome, e.nome
         ORDER BY total_valor DESC
