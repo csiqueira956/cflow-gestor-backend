@@ -9,15 +9,15 @@ const { Pool } = pg;
 const dbUrl = process.env.DATABASE_URL || '';
 console.log('🔍 DATABASE_URL configurada:', dbUrl.replace(/:[^:@]+@/, ':***@'));
 
-// Configuração do pool PostgreSQL para Supabase
+// Configuração do pool PostgreSQL para Supabase (otimizado para serverless)
 const pgPool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' || process.env.DATABASE_URL?.includes('supabase')
-    ? { rejectUnauthorized: false }
-    : false,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  ssl: {
+    rejectUnauthorized: false
+  },
+  max: 5, // Menos conexões para serverless
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 30000, // 30 segundos de timeout
 });
 
 // Log de conexão
