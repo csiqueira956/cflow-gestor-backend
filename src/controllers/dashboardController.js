@@ -95,6 +95,9 @@ export const estatisticasDashboard = async (req, res) => {
       vendasParams = [mesAtual, company_id, company_id, company_id, company_id];
     }
 
+    console.log('📋 Executando query de vendas por equipe...');
+    console.log('  Params:', vendasParams);
+
     const vendasResult = await pool.query(vendasPorEquipeQuery, vendasParams);
 
     // 3. Calcular totais e percentuais
