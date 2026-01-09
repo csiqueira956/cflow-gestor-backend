@@ -1,5 +1,6 @@
 import pool from '../config/database.js';
 
+// Dashboard Controller v1.0.2 - NULLIF fix for PostgreSQL
 // Estatísticas gerais do dashboard
 export const estatisticasDashboard = async (req, res) => {
   try {
