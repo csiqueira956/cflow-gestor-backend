@@ -71,8 +71,12 @@ const pool = {
       return { rows: result.rows, rowCount: result.rowCount };
     } catch (error) {
       console.error('❌ Erro na query:', error.message);
-      console.error('📝 Query:', text);
-      console.error('📊 Params:', params);
+      console.error('📝 Query completa:', convertedText || text);
+      console.error('📊 Params:', JSON.stringify(params));
+      if (error.position) {
+        console.error('🎯 Posição do erro:', error.position);
+        console.error('🔍 Trecho próximo ao erro:', (convertedText || text).substring(parseInt(error.position) - 50, parseInt(error.position) + 50));
+      }
       throw error;
     }
   },
