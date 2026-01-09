@@ -36,10 +36,11 @@ const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:3000',
   'http://localhost:5173', // CFLOW Gestor frontend dev
   'http://localhost:5174', // Admin SaaS frontend dev
-  process.env.ADMIN_SAAS_URL || 'http://localhost:8888'
+  process.env.ADMIN_SAAS_URL || 'http://localhost:8888',
+  'https://cflow-gestor-frontend.vercel.app' // Produção
 ];
 
-// Adicionar domínios de produção se existirem
+// Adicionar domínios de produção extras se existirem
 if (process.env.PRODUCTION_FRONTEND_URL) {
   allowedOrigins.push(process.env.PRODUCTION_FRONTEND_URL);
 }
