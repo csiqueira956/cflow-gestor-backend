@@ -10,7 +10,7 @@ export const estatisticasDashboard = async (req, res) => {
     const mesAtual = new Date().toISOString().slice(0, 7); // formato YYYY-MM
 
     const metaQuery = `
-      SELECT COALESCE(SUM(valor_meta), 0) as meta_geral
+      SELECT COALESCE(SUM(CAST(NULLIF(CAST(valor_meta AS TEXT), '') AS NUMERIC)), 0) as meta_geral
       FROM metas
       WHERE mes_referencia = ? AND company_id = ?
     `;
@@ -30,7 +30,7 @@ export const estatisticasDashboard = async (req, res) => {
           COALESCE(SUM(CAST(NULLIF(c.valor_carta, '') AS NUMERIC)), 0) as total_vendido,
           COUNT(c.id) as total_vendas,
           COALESCE(
-            (SELECT SUM(m.valor_meta)
+            (SELECT SUM(CAST(NULLIF(CAST(m.valor_meta AS TEXT), '') AS NUMERIC))
              FROM metas m
              WHERE m.equipe_id = e.id
              AND m.mes_referencia = ?
@@ -54,7 +54,7 @@ export const estatisticasDashboard = async (req, res) => {
           COALESCE(SUM(CAST(NULLIF(c.valor_carta, '') AS NUMERIC)), 0) as total_vendido,
           COUNT(c.id) as total_vendas,
           COALESCE(
-            (SELECT SUM(m.valor_meta)
+            (SELECT SUM(CAST(NULLIF(CAST(m.valor_meta AS TEXT), '') AS NUMERIC))
              FROM metas m
              WHERE m.equipe_id = e.id
              AND m.mes_referencia = ?
@@ -78,7 +78,7 @@ export const estatisticasDashboard = async (req, res) => {
           COALESCE(SUM(CAST(NULLIF(c.valor_carta, '') AS NUMERIC)), 0) as total_vendido,
           COUNT(c.id) as total_vendas,
           COALESCE(
-            (SELECT SUM(m.valor_meta)
+            (SELECT SUM(CAST(NULLIF(CAST(m.valor_meta AS TEXT), '') AS NUMERIC))
              FROM metas m
              WHERE m.equipe_id = e.id
              AND m.mes_referencia = ?
