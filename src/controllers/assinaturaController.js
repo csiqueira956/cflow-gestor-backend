@@ -81,7 +81,7 @@ export const getMinhaAssinatura = async (req, res) => {
     const subscription = result.rows[0];
 
     // Buscar planos disponíveis
-    const planosResult = await pool.query('SELECT * FROM planos WHERE ativo = 1 ORDER BY preco_fixo');
+    const planosResult = await pool.query('SELECT * FROM planos WHERE ativo = true ORDER BY preco_fixo');
 
     res.json({
       success: true,
@@ -211,7 +211,7 @@ export const updatePlan = async (req, res) => {
     const pool = (await import('../config/database.js')).default;
 
     // Buscar novo plano
-    const planoResult = await pool.query('SELECT * FROM planos WHERE id = ? AND ativo = 1', [new_plan_id]);
+    const planoResult = await pool.query('SELECT * FROM planos WHERE id = ? AND ativo = true', [new_plan_id]);
 
     if (!planoResult.rows || planoResult.rows.length === 0) {
       return res.status(404).json({
@@ -319,12 +319,12 @@ export const getUso = async (req, res) => {
 
     // Buscar detalhamento por role (vendedores e admins)
     const vendedoresResult = await pool.query(
-      'SELECT COUNT(*) as total FROM usuarios WHERE company_id = $1 AND role = $2 AND ativo = true',
+      'SELECT COUNT(*) as total FROM usuarios WHERE company_id = $1 AND role = $2',
       [companyId, 'vendedor']
     );
 
     const adminsResult = await pool.query(
-      'SELECT COUNT(*) as total FROM usuarios WHERE company_id = $1 AND role = $2 AND ativo = true',
+      'SELECT COUNT(*) as total FROM usuarios WHERE company_id = $1 AND role = $2',
       [companyId, 'admin']
     );
 
@@ -705,7 +705,7 @@ export const getCompanySubscriptionDetails = async (req, res) => {
     const subscription = assinaturaResult.rows[0] || null;
 
     // Buscar planos disponíveis
-    const planosResult = await pool.query('SELECT * FROM planos WHERE ativo = 1 ORDER BY preco_fixo');
+    const planosResult = await pool.query('SELECT * FROM planos WHERE ativo = true ORDER BY preco_fixo');
 
     // Buscar estatísticas de uso
     const usuariosResult = await pool.query(
@@ -1444,7 +1444,7 @@ export const deletePlan = async (req, res) => {
 
     if (totalAssinaturas > 0) {
       // Desativar ao invés de excluir
-      await pool.run('UPDATE planos SET ativo = 0 WHERE id = ?', [planoId]);
+      await pool.run('UPDATE planos SET ativo = false WHERE id = ?', [planoId]);
 
       return res.json({
         success: true,
@@ -1727,7 +1727,7 @@ export const getPlansForUpgrade = async (req, res) => {
 
     // Buscar todos os planos ativos (exceto Trial)
     const planosResult = await pool.query(
-      'SELECT * FROM planos WHERE ativo = 1 AND nome != ? ORDER BY preco_fixo, preco_por_usuario',
+      'SELECT * FROM planos WHERE ativo = true AND nome != ? ORDER BY preco_fixo, preco_por_usuario',
       ['Trial']
     );
 
@@ -1825,7 +1825,7 @@ export const initiateUpgrade = async (req, res) => {
 
     // Buscar novo plano
     const planoResult = await pool.query(
-      'SELECT * FROM planos WHERE id = ? AND ativo = 1',
+      'SELECT * FROM planos WHERE id = ? AND ativo = true',
       [plano_id]
     );
 
