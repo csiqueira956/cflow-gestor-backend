@@ -111,7 +111,7 @@ class Cliente {
     `;
 
     const values = [
-      nome, cpf, toNullIfEmpty(telefone), email,
+      nome, cpf, toNullIfEmpty(telefone) || toNullIfEmpty(telefone_celular), email,
       toNullIfEmpty(data_nascimento), toNullIfEmpty(estado_civil), toNullIfEmpty(nacionalidade),
       toNullIfEmpty(cidade_nascimento), toNullIfEmpty(nome_mae), toNullIfEmpty(profissao), toNullIfEmpty(remuneracao),
       toNullIfEmpty(telefone_residencial), toNullIfEmpty(telefone_comercial), toNullIfEmpty(telefone_celular), toNullIfEmpty(telefone_celular_2),
