@@ -79,6 +79,12 @@ class Cliente {
       company_id
     } = clienteData;
 
+    // Helper: Converter strings vazias para null (especialmente para campos de data)
+    const toNullIfEmpty = (value) => {
+      if (value === '' || value === undefined || value === null) return null;
+      return value;
+    };
+
     const query = `
       INSERT INTO clientes (
         nome, cpf, telefone, email,
@@ -105,17 +111,21 @@ class Cliente {
     `;
 
     const values = [
-      nome, cpf, telefone, email,
-      data_nascimento, estado_civil, nacionalidade, cidade_nascimento, nome_mae, profissao, remuneracao,
-      telefone_residencial, telefone_comercial, telefone_celular, telefone_celular_2,
-      tipo_documento, numero_documento, orgao_emissor, data_emissao,
-      cpf_conjuge, nome_conjuge,
-      cep, tipo_logradouro, endereco, numero_endereco, complemento, bairro, cidade, estado,
-      forma_pagamento_primeira, data_pre_datado, valor_cheque, numero_cheque, data_vencimento_cheque,
-      banco_cheque, agencia_cheque, conta_cheque,
-      forma_pagamento_demais, nome_correntista, cpf_correntista, banco_debito, agencia_debito, conta_debito,
+      nome, cpf, toNullIfEmpty(telefone), email,
+      toNullIfEmpty(data_nascimento), toNullIfEmpty(estado_civil), toNullIfEmpty(nacionalidade),
+      toNullIfEmpty(cidade_nascimento), toNullIfEmpty(nome_mae), toNullIfEmpty(profissao), toNullIfEmpty(remuneracao),
+      toNullIfEmpty(telefone_residencial), toNullIfEmpty(telefone_comercial), toNullIfEmpty(telefone_celular), toNullIfEmpty(telefone_celular_2),
+      toNullIfEmpty(tipo_documento), toNullIfEmpty(numero_documento), toNullIfEmpty(orgao_emissor), toNullIfEmpty(data_emissao),
+      toNullIfEmpty(cpf_conjuge), toNullIfEmpty(nome_conjuge),
+      toNullIfEmpty(cep), toNullIfEmpty(tipo_logradouro), toNullIfEmpty(endereco), toNullIfEmpty(numero_endereco),
+      toNullIfEmpty(complemento), toNullIfEmpty(bairro), toNullIfEmpty(cidade), toNullIfEmpty(estado),
+      toNullIfEmpty(forma_pagamento_primeira), toNullIfEmpty(data_pre_datado), toNullIfEmpty(valor_cheque),
+      toNullIfEmpty(numero_cheque), toNullIfEmpty(data_vencimento_cheque),
+      toNullIfEmpty(banco_cheque), toNullIfEmpty(agencia_cheque), toNullIfEmpty(conta_cheque),
+      toNullIfEmpty(forma_pagamento_demais), toNullIfEmpty(nome_correntista), toNullIfEmpty(cpf_correntista),
+      toNullIfEmpty(banco_debito), toNullIfEmpty(agencia_debito), toNullIfEmpty(conta_debito),
       aceita_seguro,
-      valor_carta, administradora, grupo, cota, observacao,
+      toNullIfEmpty(valor_carta), toNullIfEmpty(administradora), toNullIfEmpty(grupo), toNullIfEmpty(cota), toNullIfEmpty(observacao),
       etapa, vendedor_id, company_id
     ];
 
