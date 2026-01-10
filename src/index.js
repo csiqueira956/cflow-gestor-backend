@@ -131,4 +131,4 @@ if (!isVercel) {
 }
 
 export default app;
-// Deploy trigger: 1767931329
+// Deploy trigger: 1736551800 - Force redeploy to clear serverless cache
