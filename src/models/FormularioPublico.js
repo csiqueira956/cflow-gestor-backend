@@ -69,7 +69,7 @@ class FormularioPublico {
   static async toggleAtivo(id, vendedorId) {
     const query = `
       UPDATE formularios_publicos
-      SET ativo = CASE WHEN ativo = 1 THEN 0 ELSE 1 END
+      SET ativo = NOT ativo
       WHERE id = $1 AND vendedor_id = $2
     `;
 
