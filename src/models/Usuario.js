@@ -29,6 +29,7 @@ class Usuario {
     const query = `
       SELECT u.id, u.nome, u.email, u.role, u.link_publico, u.tipo_usuario,
              u.percentual_comissao, u.celular, u.equipe_id, u.foto_perfil, u.created_at,
+             u.company_id,
              e.nome as equipe_nome
       FROM usuarios u
       LEFT JOIN equipes e ON u.equipe_id = e.id
