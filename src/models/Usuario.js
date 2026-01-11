@@ -48,7 +48,7 @@ class Usuario {
              e.nome as equipe_nome
       FROM usuarios u
       LEFT JOIN equipes e ON u.equipe_id = e.id
-      WHERE u.link_publico = $1 AND u.role = 'vendedor'
+      WHERE u.link_publico = $1
     `;
     const result = await pool.query(query, [link_publico]);
     return result.rows[0];
