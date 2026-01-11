@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Force rebuild - v2
+
 const { Pool } = pg;
 
 // Configuração otimizada para Vercel Serverless
