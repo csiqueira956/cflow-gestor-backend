@@ -115,4 +115,32 @@ export const dashboardAPI = {
   estatisticas: () => api.get('/dashboard/estatisticas'),
 };
 
+// Funções de planos (SaaS)
+export const plansAPI = {
+  listar: () => axios.get(`${API_URL}/plans`), // Public endpoint
+  buscar: (idOrSlug) => axios.get(`${API_URL}/plans/${idOrSlug}`), // Public endpoint
+  comparar: (planId1, planId2) => axios.get(`${API_URL}/plans/compare/${planId1}/${planId2}`), // Public endpoint
+};
+
+// Funções de assinatura (SaaS)
+export const subscriptionAPI = {
+  summary: () => api.get('/subscription/summary'),
+  createTrial: () => api.post('/subscription/trial'),
+  upgrade: (planId) => api.post('/subscription/upgrade', { planId }),
+  downgrade: (planId) => api.post('/subscription/downgrade', { planId }),
+  cancel: (immediate = false) => api.post('/subscription/cancel', { immediate }),
+  history: () => api.get('/subscription/history'),
+};
+
+// Funções de billing/faturas (SaaS)
+export const billingAPI = {
+  listInvoices: (params) => api.get('/billing/invoices', { params }),
+  getInvoice: (id) => api.get(`/billing/invoices/${id}`),
+  getStats: () => api.get('/billing/stats'),
+  getNextInvoice: () => api.get('/billing/next'),
+  getOverdueInvoices: () => api.get('/billing/overdue'),
+  getUpcomingInvoices: (days = 7) => api.get('/billing/upcoming', { params: { days } }),
+  getDashboard: () => api.get('/billing/dashboard'),
+};
+
 export default api;

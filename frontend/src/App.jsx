@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
+import Signup from './pages/Signup';
 import EsqueciSenha from './pages/EsqueciSenha';
 import ResetarSenha from './pages/ResetarSenha';
 import TermosDeUso from './pages/TermosDeUso';
@@ -69,6 +70,15 @@ function AppRoutes() {
           element={
             <PublicRoute>
               <Login />
+            </PublicRoute>
+          }
+        />
+
+        <Route
+          path="/cadastro"
+          element={
+            <PublicRoute>
+              <Signup />
             </PublicRoute>
           }
         />

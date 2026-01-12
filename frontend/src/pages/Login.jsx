@@ -520,6 +520,18 @@ const Login = () => {
           </div>
         )}
 
+        {/* Link para cadastro */}
+        {!modoRegistro && (
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
+              Não tem uma conta?{' '}
+              <Link to="/cadastro" className="text-primary-600 hover:text-primary-700 font-semibold">
+                Criar conta grátis
+              </Link>
+            </p>
+          </div>
+        )}
+
         {/* Links legais */}
         <div className="mt-6 text-center">
           <p className="text-xs text-gray-600">
