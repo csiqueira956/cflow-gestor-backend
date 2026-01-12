@@ -17,6 +17,7 @@ import MeuLink from './pages/MeuLink';
 import Perfil from './pages/Perfil';
 import Comissoes from './pages/Comissoes';
 import Configuracoes from './pages/Configuracoes';
+import Billing from './pages/Billing';
 import Vendedores from './pages/configuracoes/Vendedores';
 import Equipes from './pages/configuracoes/Equipes';
 import Administradoras from './pages/configuracoes/Administradoras';
@@ -208,6 +209,15 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Metas />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/assinatura"
+          element={
+            <ProtectedRoute>
+              <Billing />
             </ProtectedRoute>
           }
         />
