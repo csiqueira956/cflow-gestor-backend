@@ -14,6 +14,7 @@ import dashboardRoutes from './routes/dashboardRoutes.js';
 import planRoutes from './routes/planRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import billingRoutes from './routes/billingRoutes.js';
+import webhookRoutes from './routes/webhookRoutes.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 
 // Configuração de variáveis de ambiente
@@ -50,6 +51,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/webhooks', webhookRoutes); // Webhooks do gateway (sem auth)
 
 // Rota de teste
 app.get('/', (req, res) => {
@@ -68,7 +70,8 @@ app.get('/', (req, res) => {
       dashboard: '/api/dashboard',
       plans: '/api/plans',
       subscription: '/api/subscription',
-      billing: '/api/billing'
+      billing: '/api/billing',
+      webhooks: '/api/webhooks'
     }
   });
 });
