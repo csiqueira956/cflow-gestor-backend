@@ -11,6 +11,9 @@ import equipeRoutes from './routes/equipeRoutes.js';
 import administradoraRoutes from './routes/administradoraRoutes.js';
 import metaRoutes from './routes/metaRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
+import planRoutes from './routes/planRoutes.js';
+import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import billingRoutes from './routes/billingRoutes.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 
 // Configuração de variáveis de ambiente
@@ -43,11 +46,16 @@ app.use('/api/administradoras', administradoraRoutes);
 app.use('/api/metas', metaRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
+// Rotas SaaS (planos, assinaturas, billing)
+app.use('/api/plans', planRoutes);
+app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/billing', billingRoutes);
+
 // Rota de teste
 app.get('/', (req, res) => {
   res.json({
-    message: 'API Gestor de Consórcios',
-    version: '1.0.0',
+    message: 'API Gestor de Consórcios - SaaS',
+    version: '2.0.0',
     endpoints: {
       auth: '/api/auth',
       clientes: '/api/clientes',
@@ -56,7 +64,11 @@ app.get('/', (req, res) => {
       comissoes: '/api/comissoes',
       equipes: '/api/equipes',
       administradoras: '/api/administradoras',
-      metas: '/api/metas'
+      metas: '/api/metas',
+      dashboard: '/api/dashboard',
+      plans: '/api/plans',
+      subscription: '/api/subscription',
+      billing: '/api/billing'
     }
   });
 });
