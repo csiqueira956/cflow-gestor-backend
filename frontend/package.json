@@ -1,6 +1,6 @@
 {
   "name": "gestor-consorcios-frontend",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Frontend para sistema de gestão de consórcios",
   "type": "module",
   "scripts": {

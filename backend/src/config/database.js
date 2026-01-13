@@ -16,7 +16,10 @@ const pool = new Pool({
   // Configurações otimizadas para serverless
   max: 1, // Máximo de 1 conexão por função serverless
   idleTimeoutMillis: 0, // Não manter conexões idle
-  connectionTimeoutMillis: 10000, // Timeout de 10 segundos
+  connectionTimeoutMillis: 30000, // Timeout de 30 segundos (para cold starts)
+  allowExitOnIdle: true, // Permite que o pool feche quando idle
+  keepAlive: true, // Mantém conexão ativa
+  keepAliveInitialDelayMillis: 10000
 });
 
 // Log de conexão
