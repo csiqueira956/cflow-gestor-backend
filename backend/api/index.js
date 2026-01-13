@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pool from '../src/config/database.js';
 
+// Versão da API: 1.0.5 - Estrutura padronizada com wrapper data
 // Configuração de variáveis de ambiente
 dotenv.config();
 
