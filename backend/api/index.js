@@ -272,15 +272,17 @@ app.get('/api/dashboard/estatisticas', async (req, res) => {
     const mesReferencia = now.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
     res.json({
-      totalClientes: 0,
-      totalLeads: 0,
-      totalVendas: 0,
-      taxaConversao: 0,
-      mes_referencia: mesReferencia,
-      meta_geral: 0,
-      total_vendido_geral: 0,
-      percentual_atingido_geral: 0,
-      vendas_por_equipe: []
+      data: {
+        totalClientes: 0,
+        totalLeads: 0,
+        totalVendas: 0,
+        taxaConversao: 0,
+        mes_referencia: mesReferencia,
+        meta_geral: 0,
+        total_vendido_geral: 0,
+        percentual_atingido_geral: 0,
+        vendas_por_equipe: []
+      }
     });
   } catch (error) {
     console.error('Erro ao buscar estatísticas:', error);
@@ -293,13 +295,15 @@ app.get('/api/clientes/estatisticas', async (req, res) => {
   try {
     // Retorna estrutura esperada pelo frontend: array de estatísticas por etapa
     res.json({
-      estatisticas: [
-        { etapa: 'novo_contato', total: 0 },
-        { etapa: 'proposta_enviada', total: 0 },
-        { etapa: 'negociacao', total: 0 },
-        { etapa: 'fechado', total: 0 },
-        { etapa: 'perdido', total: 0 }
-      ]
+      data: {
+        estatisticas: [
+          { etapa: 'novo_contato', total: 0 },
+          { etapa: 'proposta_enviada', total: 0 },
+          { etapa: 'negociacao', total: 0 },
+          { etapa: 'fechado', total: 0 },
+          { etapa: 'perdido', total: 0 }
+        ]
+      }
     });
   } catch (error) {
     console.error('Erro ao buscar estatísticas de clientes:', error);
