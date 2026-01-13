@@ -43,6 +43,11 @@ const ClienteModal = ({ cliente, onClose, onAtualizar }) => {
     setModoEdicao(false);
   };
 
+  // Função auxiliar para atualizar campo
+  const handleChange = (campo, valor) => {
+    setDadosEditados({ ...dadosEditados, [campo]: valor });
+  };
+
   // Formatar CPF
   const formatarCPF = (cpf) => {
     if (!cpf) return 'Não informado';
@@ -83,8 +88,53 @@ const ClienteModal = ({ cliente, onClose, onAtualizar }) => {
     proposta_enviada: 'Proposta Enviada',
     negociacao: 'Em Negociação',
     fechado: 'Fechado',
+    em_comissionamento: 'Em Comissionamento',
     perdido: 'Perdido',
   };
+
+  // Componente de campo editável
+  const CampoEditavel = ({ label, campo, valor, tipo = 'text', opcoes = null }) => (
+    <div>
+      <span className="text-sm font-medium text-gray-500">{label}</span>
+      {modoEdicao ? (
+        opcoes ? (
+          <select
+            value={dadosEditados[campo] || ''}
+            onChange={(e) => handleChange(campo, e.target.value)}
+            className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="">Selecione...</option>
+            {opcoes.map((op) => (
+              <option key={op.value} value={op.value}>{op.label}</option>
+            ))}
+          </select>
+        ) : tipo === 'textarea' ? (
+          <textarea
+            value={dadosEditados[campo] || ''}
+            onChange={(e) => handleChange(campo, e.target.value)}
+            rows={3}
+            className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          />
+        ) : (
+          <input
+            type={tipo}
+            value={dadosEditados[campo] || ''}
+            onChange={(e) => handleChange(campo, e.target.value)}
+            className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          />
+        )
+      ) : (
+        <p className="text-gray-900">
+          {tipo === 'date' ? formatarData(valor) :
+           campo === 'cpf' ? formatarCPF(valor) :
+           campo === 'cep' ? formatarCEP(valor) :
+           campo.includes('telefone') ? formatarTelefone(valor) :
+           campo.includes('valor') || campo === 'remuneracao' ? formatarValor(valor) :
+           valor || 'Não informado'}
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" onClick={onClose}>
@@ -179,238 +229,201 @@ const ClienteModal = ({ cliente, onClose, onAtualizar }) => {
               {/* Seção 1: Dados Básicos */}
               <div className="card bg-white">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                  📋 Dados Básicos
+                  Dados Básicos
                 </h3>
                 <div className="space-y-3">
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Nome Completo</span>
-                    {modoEdicao ? (
-                      <input
-                        type="text"
-                        value={dadosEditados.nome || ''}
-                        onChange={(e) => setDadosEditados({ ...dadosEditados, nome: e.target.value })}
-                        className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      />
-                    ) : (
-                      <p className="text-gray-900">{cliente.nome || 'Não informado'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">CPF</span>
-                    <p className="text-gray-900">{formatarCPF(cliente.cpf)}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Email</span>
-                    {modoEdicao ? (
-                      <input
-                        type="email"
-                        value={dadosEditados.email || ''}
-                        onChange={(e) => setDadosEditados({ ...dadosEditados, email: e.target.value })}
-                        className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      />
-                    ) : (
-                      <p className="text-gray-900">{cliente.email || 'Não informado'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Telefone</span>
-                    {modoEdicao ? (
-                      <input
-                        type="text"
-                        value={dadosEditados.telefone || ''}
-                        onChange={(e) => setDadosEditados({ ...dadosEditados, telefone: e.target.value })}
-                        className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      />
-                    ) : (
-                      <p className="text-gray-900">{formatarTelefone(cliente.telefone)}</p>
-                    )}
-                  </div>
+                  <CampoEditavel label="Nome Completo" campo="nome" valor={cliente.nome} />
+                  <CampoEditavel label="CPF" campo="cpf" valor={cliente.cpf} />
+                  <CampoEditavel label="Email" campo="email" valor={cliente.email} tipo="email" />
+                  <CampoEditavel label="Telefone" campo="telefone" valor={cliente.telefone} />
+                  <CampoEditavel
+                    label="Etapa"
+                    campo="etapa"
+                    valor={etapasNomes[cliente.etapa] || cliente.etapa}
+                    opcoes={[
+                      { value: 'novo_contato', label: 'Novo Contato' },
+                      { value: 'proposta_enviada', label: 'Proposta Enviada' },
+                      { value: 'negociacao', label: 'Em Negociação' },
+                      { value: 'fechado', label: 'Fechado' },
+                      { value: 'em_comissionamento', label: 'Em Comissionamento' },
+                      { value: 'perdido', label: 'Perdido' },
+                    ]}
+                  />
                 </div>
               </div>
 
               {/* Seção 2: Dados Pessoais */}
               <div className="card bg-white">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                  👤 Dados Pessoais
+                  Dados Pessoais
                 </h3>
                 <div className="space-y-3">
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Data de Nascimento</span>
-                    <p className="text-gray-900">{formatarData(cliente.data_nascimento)}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Estado Civil</span>
-                    <p className="text-gray-900">{cliente.estado_civil || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Nacionalidade</span>
-                    <p className="text-gray-900">{cliente.nacionalidade || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Cidade de Nascimento</span>
-                    <p className="text-gray-900">{cliente.cidade_nascimento || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Nome da Mãe</span>
-                    <p className="text-gray-900">{cliente.nome_mae || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Profissão</span>
-                    <p className="text-gray-900">{cliente.profissao || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Remuneração</span>
-                    <p className="text-gray-900">{formatarValor(cliente.remuneracao)}</p>
-                  </div>
+                  <CampoEditavel label="Data de Nascimento" campo="data_nascimento" valor={cliente.data_nascimento} tipo="date" />
+                  <CampoEditavel
+                    label="Estado Civil"
+                    campo="estado_civil"
+                    valor={cliente.estado_civil}
+                    opcoes={[
+                      { value: 'Solteiro(a)', label: 'Solteiro(a)' },
+                      { value: 'Casado(a)', label: 'Casado(a)' },
+                      { value: 'Divorciado(a)', label: 'Divorciado(a)' },
+                      { value: 'Viúvo(a)', label: 'Viúvo(a)' },
+                      { value: 'União Estável', label: 'União Estável' },
+                    ]}
+                  />
+                  <CampoEditavel label="Nacionalidade" campo="nacionalidade" valor={cliente.nacionalidade} />
+                  <CampoEditavel label="Cidade de Nascimento" campo="cidade_nascimento" valor={cliente.cidade_nascimento} />
+                  <CampoEditavel label="Nome da Mãe" campo="nome_mae" valor={cliente.nome_mae} />
+                  <CampoEditavel label="Profissão" campo="profissao" valor={cliente.profissao} />
+                  <CampoEditavel label="Remuneração" campo="remuneracao" valor={cliente.remuneracao} tipo="number" />
                 </div>
               </div>
 
               {/* Seção 3: Telefones */}
               <div className="card bg-white">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                  📞 Telefones
+                  Telefones
                 </h3>
                 <div className="space-y-3">
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Residencial</span>
-                    <p className="text-gray-900">{formatarTelefone(cliente.telefone_residencial)}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Comercial</span>
-                    <p className="text-gray-900">{formatarTelefone(cliente.telefone_comercial)}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Celular 1</span>
-                    <p className="text-gray-900">{formatarTelefone(cliente.telefone_celular)}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Celular 2</span>
-                    <p className="text-gray-900">{formatarTelefone(cliente.telefone_celular_2)}</p>
-                  </div>
+                  <CampoEditavel label="Residencial" campo="telefone_residencial" valor={cliente.telefone_residencial} />
+                  <CampoEditavel label="Comercial" campo="telefone_comercial" valor={cliente.telefone_comercial} />
+                  <CampoEditavel label="Celular 1" campo="telefone_celular" valor={cliente.telefone_celular} />
+                  <CampoEditavel label="Celular 2" campo="telefone_celular_2" valor={cliente.telefone_celular_2} />
                 </div>
               </div>
 
               {/* Seção 4: Documentos */}
               <div className="card bg-white">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                  🆔 Documentos
+                  Documentos
                 </h3>
                 <div className="space-y-3">
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Tipo de Documento</span>
-                    <p className="text-gray-900">{cliente.tipo_documento || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Número</span>
-                    <p className="text-gray-900">{cliente.numero_documento || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Órgão Emissor</span>
-                    <p className="text-gray-900">{cliente.orgao_emissor || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Data de Emissão</span>
-                    <p className="text-gray-900">{formatarData(cliente.data_emissao)}</p>
-                  </div>
+                  <CampoEditavel
+                    label="Tipo de Documento"
+                    campo="tipo_documento"
+                    valor={cliente.tipo_documento}
+                    opcoes={[
+                      { value: 'RG', label: 'RG' },
+                      { value: 'CNH', label: 'CNH' },
+                      { value: 'Passaporte', label: 'Passaporte' },
+                    ]}
+                  />
+                  <CampoEditavel label="Número do Documento" campo="numero_documento" valor={cliente.numero_documento} />
+                  <CampoEditavel label="Órgão Emissor" campo="orgao_emissor" valor={cliente.orgao_emissor} />
+                  <CampoEditavel label="Data de Emissão" campo="data_emissao" valor={cliente.data_emissao} tipo="date" />
                 </div>
               </div>
 
-              {/* Seção 5: Endereço */}
-              <div className="card bg-white md:col-span-2">
+              {/* Seção 5: Cônjuge */}
+              <div className="card bg-white">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                  📍 Endereço
+                  Dados do Cônjuge
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">CEP</span>
-                    <p className="text-gray-900">{formatarCEP(cliente.cep)}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Tipo de Logradouro</span>
-                    <p className="text-gray-900">{cliente.tipo_logradouro || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Endereço</span>
-                    <p className="text-gray-900">{cliente.endereco || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Número</span>
-                    <p className="text-gray-900">{cliente.numero_endereco || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Complemento</span>
-                    <p className="text-gray-900">{cliente.complemento || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Bairro</span>
-                    <p className="text-gray-900">{cliente.bairro || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Cidade</span>
-                    <p className="text-gray-900">{cliente.cidade || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Estado</span>
-                    <p className="text-gray-900">{cliente.estado || 'Não informado'}</p>
-                  </div>
+                <div className="space-y-3">
+                  <CampoEditavel label="CPF do Cônjuge" campo="cpf_conjuge" valor={cliente.cpf_conjuge} />
+                  <CampoEditavel label="Nome do Cônjuge" campo="nome_conjuge" valor={cliente.nome_conjuge} />
                 </div>
               </div>
 
               {/* Seção 6: Consórcio */}
               <div className="card bg-white">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                  💰 Informações do Consórcio
+                  Informações do Consórcio
                 </h3>
                 <div className="space-y-3">
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Valor da Carta</span>
-                    <p className="text-gray-900 font-semibold text-lg">{formatarValor(cliente.valor_carta)}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Administradora</span>
-                    <p className="text-gray-900">{cliente.administradora || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Grupo</span>
-                    <p className="text-gray-900">{cliente.grupo || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Cota</span>
-                    <p className="text-gray-900">{cliente.cota || 'Não informado'}</p>
-                  </div>
+                  <CampoEditavel label="Valor da Carta" campo="valor_carta" valor={cliente.valor_carta} tipo="number" />
+                  <CampoEditavel label="Administradora" campo="administradora" valor={cliente.administradora} />
+                  <CampoEditavel label="Grupo" campo="grupo" valor={cliente.grupo} />
+                  <CampoEditavel label="Cota" campo="cota" valor={cliente.cota} />
                   <div>
                     <span className="text-sm font-medium text-gray-500">Aceita Seguro</span>
-                    <p className="text-gray-900">{cliente.aceita_seguro ? 'Sim' : 'Não'}</p>
+                    {modoEdicao ? (
+                      <select
+                        value={dadosEditados.aceita_seguro ? 'sim' : 'nao'}
+                        onChange={(e) => handleChange('aceita_seguro', e.target.value === 'sim')}
+                        className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      >
+                        <option value="sim">Sim</option>
+                        <option value="nao">Não</option>
+                      </select>
+                    ) : (
+                      <p className="text-gray-900">{cliente.aceita_seguro ? 'Sim' : 'Não'}</p>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Seção 7: Vendedor */}
-              <div className="card bg-white">
+              {/* Seção 7: Endereço */}
+              <div className="card bg-white md:col-span-2">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                  👨‍💼 Vendedor Responsável
+                  Endereço
                 </h3>
-                <div className="space-y-3">
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Nome</span>
-                    <p className="text-gray-900">{cliente.vendedor_nome || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Etapa Atual</span>
-                    <p className="text-gray-900 font-medium">{etapasNomes[cliente.etapa] || cliente.etapa}</p>
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <CampoEditavel label="CEP" campo="cep" valor={cliente.cep} />
+                  <CampoEditavel
+                    label="Tipo de Logradouro"
+                    campo="tipo_logradouro"
+                    valor={cliente.tipo_logradouro}
+                    opcoes={[
+                      { value: 'Rua', label: 'Rua' },
+                      { value: 'Avenida', label: 'Avenida' },
+                      { value: 'Travessa', label: 'Travessa' },
+                      { value: 'Alameda', label: 'Alameda' },
+                      { value: 'Praça', label: 'Praça' },
+                      { value: 'Estrada', label: 'Estrada' },
+                    ]}
+                  />
+                  <CampoEditavel label="Endereço" campo="endereco" valor={cliente.endereco} />
+                  <CampoEditavel label="Número" campo="numero_endereco" valor={cliente.numero_endereco} />
+                  <CampoEditavel label="Complemento" campo="complemento" valor={cliente.complemento} />
+                  <CampoEditavel label="Bairro" campo="bairro" valor={cliente.bairro} />
+                  <CampoEditavel label="Cidade" campo="cidade" valor={cliente.cidade} />
+                  <CampoEditavel
+                    label="Estado"
+                    campo="estado"
+                    valor={cliente.estado}
+                    opcoes={[
+                      { value: 'AC', label: 'Acre' },
+                      { value: 'AL', label: 'Alagoas' },
+                      { value: 'AP', label: 'Amapá' },
+                      { value: 'AM', label: 'Amazonas' },
+                      { value: 'BA', label: 'Bahia' },
+                      { value: 'CE', label: 'Ceará' },
+                      { value: 'DF', label: 'Distrito Federal' },
+                      { value: 'ES', label: 'Espírito Santo' },
+                      { value: 'GO', label: 'Goiás' },
+                      { value: 'MA', label: 'Maranhão' },
+                      { value: 'MT', label: 'Mato Grosso' },
+                      { value: 'MS', label: 'Mato Grosso do Sul' },
+                      { value: 'MG', label: 'Minas Gerais' },
+                      { value: 'PA', label: 'Pará' },
+                      { value: 'PB', label: 'Paraíba' },
+                      { value: 'PR', label: 'Paraná' },
+                      { value: 'PE', label: 'Pernambuco' },
+                      { value: 'PI', label: 'Piauí' },
+                      { value: 'RJ', label: 'Rio de Janeiro' },
+                      { value: 'RN', label: 'Rio Grande do Norte' },
+                      { value: 'RS', label: 'Rio Grande do Sul' },
+                      { value: 'RO', label: 'Rondônia' },
+                      { value: 'RR', label: 'Roraima' },
+                      { value: 'SC', label: 'Santa Catarina' },
+                      { value: 'SP', label: 'São Paulo' },
+                      { value: 'SE', label: 'Sergipe' },
+                      { value: 'TO', label: 'Tocantins' },
+                    ]}
+                  />
                 </div>
               </div>
 
               {/* Observações */}
               <div className="card bg-yellow-50 md:col-span-2">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-yellow-200">
-                  📝 Observações
+                  Observações
                 </h3>
                 {modoEdicao ? (
                   <textarea
                     value={dadosEditados.observacao || ''}
-                    onChange={(e) => setDadosEditados({ ...dadosEditados, observacao: e.target.value })}
+                    onChange={(e) => handleChange('observacao', e.target.value)}
                     placeholder="Adicione observações sobre o cliente..."
                     rows={5}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"

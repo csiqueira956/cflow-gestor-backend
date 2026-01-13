@@ -68,9 +68,9 @@ const Metas = () => {
         equipesAPI.listar(),
       ]);
 
-      setMetas(metasResponse.data.metas);
-      setVendedores(vendedoresResponse.data.vendedores);
-      setEquipes(equipesResponse.data.equipes);
+      setMetas(metasResponse.data.data?.metas || []);
+      setVendedores(vendedoresResponse.data.data?.vendedores || []);
+      setEquipes(equipesResponse.data.data?.equipes || []);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');

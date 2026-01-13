@@ -66,8 +66,8 @@ const Admin = () => {
         usuariosAPI.listarUsuarios(),
         equipesAPI.listar()
       ]);
-      setVendedores(usuariosResponse.data.usuarios);
-      setEquipes(equipesResponse.data.equipes);
+      setVendedores(usuariosResponse.data.data?.usuarios || []);
+      setEquipes(equipesResponse.data.data?.equipes || []);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');

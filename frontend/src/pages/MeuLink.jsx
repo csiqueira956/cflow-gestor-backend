@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
-import axios from 'axios';
+import { authAPI, clientesAPI } from '../api/api';
 
 const MeuLink = () => {
   const { usuario } = useAuth();
@@ -17,11 +17,8 @@ const MeuLink = () => {
 
   const carregarLink = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3001/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setLinkPublico(response.data.link_publico);
+      const response = await authAPI.verificarToken();
+      setLinkPublico(response.data.link_publico || '');
     } catch (error) {
       console.error('Erro ao carregar link:', error);
       setMensagem({ tipo: 'erro', texto: 'Erro ao carregar seu link público' });
@@ -32,11 +29,10 @@ const MeuLink = () => {
 
   const carregarEstatisticas = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3001/api/clientes/estatisticas', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setEstatisticas({ total: response.data.total || 0 });
+      const response = await clientesAPI.estatisticas();
+      const stats = response.data.data?.estatisticas || [];
+      const total = stats.reduce((acc, s) => acc + parseInt(s.total || 0), 0);
+      setEstatisticas({ total });
     } catch (error) {
       console.error('Erro ao carregar estatísticas:', error);
     }

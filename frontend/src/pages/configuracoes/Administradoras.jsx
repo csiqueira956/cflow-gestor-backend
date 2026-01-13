@@ -71,7 +71,7 @@ const Administradoras = () => {
   const carregarAdministradoras = async () => {
     try {
       const response = await administradorasAPI.listar();
-      setAdministradoras(response.data.administradoras);
+      setAdministradoras(response.data.data?.administradoras || []);
     } catch (error) {
       console.error('Erro ao carregar administradoras:', error);
       toast.error('Erro ao carregar administradoras');

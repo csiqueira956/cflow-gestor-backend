@@ -54,7 +54,7 @@ const Navbar = () => {
       setBuscando(true);
       try {
         const response = await clientesAPI.listar();
-        const clientes = response.data.clientes || [];
+        const clientes = response.data.data?.clientes || [];
 
         const termo = termoBusca.toLowerCase();
         const filtrados = clientes.filter((cliente) => {

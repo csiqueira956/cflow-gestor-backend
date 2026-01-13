@@ -42,6 +42,10 @@ const Billing = () => {
   };
 
   const formatPrice = (price) => {
+    // Se o valor for undefined, null ou NaN, retorna R$ 0,00
+    if (price === undefined || price === null || isNaN(price)) {
+      return 'R$ 0,00';
+    }
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',

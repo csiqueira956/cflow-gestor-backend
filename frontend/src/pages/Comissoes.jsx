@@ -60,11 +60,11 @@ const Comissoes = () => {
       const results = await Promise.all(promises);
       const [comissoesRes, clientesRes, vendedoresRes] = results;
 
-      setComissoes(comissoesRes.data.comissoes);
-      setClientes(clientesRes.data.clientes);
+      setComissoes(comissoesRes.data.data.comissoes);
+      setClientes(clientesRes.data.data.clientes);
 
       if (isAdmin() && vendedoresRes) {
-        setVendedores(vendedoresRes.data.vendedores);
+        setVendedores(vendedoresRes.data.data.vendedores);
       }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);

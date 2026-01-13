@@ -55,7 +55,7 @@ const Equipes = () => {
   const carregarEquipes = async () => {
     try {
       const response = await equipesAPI.listar();
-      setEquipes(response.data.equipes);
+      setEquipes(response.data.data?.equipes || []);
     } catch (error) {
       console.error('Erro ao carregar equipes:', error);
       toast.error('Erro ao carregar equipes');

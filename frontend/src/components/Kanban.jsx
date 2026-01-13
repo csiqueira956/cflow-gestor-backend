@@ -163,7 +163,7 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
   const carregarClientes = async () => {
     try {
       const response = await clientesAPI.listar();
-      setClientes(response.data.clientes || []);
+      setClientes(response.data.data?.clientes || []);
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
       toast.error('Erro ao carregar clientes');

@@ -147,7 +147,7 @@ app.get('/api/auth/me', async (req, res) => {
 
     // Buscar usuário atualizado no banco
     const result = await pool.query(
-      'SELECT id, nome, email, role, company_id, foto_perfil FROM usuarios WHERE id = $1',
+      'SELECT id, nome, email, role, company_id, foto_perfil, link_publico FROM usuarios WHERE id = $1',
       [decoded.id]
     );
 
@@ -155,7 +155,26 @@ app.get('/api/auth/me', async (req, res) => {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
-    res.json(result.rows[0]);
+    let usuario = result.rows[0];
+
+    // Se não tem link_publico, gerar um
+    if (!usuario.link_publico) {
+      const linkPublico = usuario.nome.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        + '-' + Math.random().toString(36).substring(2, 8);
+
+      await pool.query(
+        'UPDATE usuarios SET link_publico = $1 WHERE id = $2',
+        [linkPublico, usuario.id]
+      );
+
+      usuario.link_publico = linkPublico;
+    }
+
+    res.json(usuario);
   } catch (error) {
     console.error('❌ Erro ao verificar token:', error);
     res.status(401).json({ error: 'Token inválido ou expirado' });
@@ -199,12 +218,20 @@ app.post('/api/auth/register', async (req, res) => {
 
       const company_id = companyResult.rows[0].id;
 
-      // 2. Criar usuário admin
+      // 2. Gerar link público único
+      const linkPublico = nome.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/[^a-z0-9]/g, '-') // Substitui caracteres especiais por hífen
+        .replace(/-+/g, '-') // Remove hífens duplicados
+        .replace(/^-|-$/g, '') // Remove hífens no início/fim
+        + '-' + Math.random().toString(36).substring(2, 8); // Adiciona código único
+
+      // 3. Criar usuário admin
       const userResult = await pool.query(
-        `INSERT INTO usuarios (nome, email, senha_hash, role, company_id, created_at)
-         VALUES ($1, $2, $3, 'admin', $4, NOW())
-         RETURNING id, nome, email, role, company_id`,
-        [nome, email, senha_hash, company_id]
+        `INSERT INTO usuarios (nome, email, senha_hash, role, company_id, link_publico, created_at)
+         VALUES ($1, $2, $3, 'admin', $4, $5, NOW())
+         RETURNING id, nome, email, role, company_id, link_publico`,
+        [nome, email, senha_hash, company_id, linkPublico]
       );
 
       const usuario = userResult.rows[0];
@@ -332,14 +359,13 @@ app.get('/api/subscription/summary', async (req, res) => {
       LIMIT 1
     `, [decoded.company_id]);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Assinatura não encontrada' });
-    }
+    // Se não tem assinatura, retorna null (não é erro, apenas não tem assinatura ainda)
+    const subscription = result.rows.length > 0 ? result.rows[0] : null;
 
     // Retorna estrutura esperada pelo frontend
     res.json({
       data: {
-        subscription: result.rows[0]
+        subscription: subscription
       }
     });
   } catch (error) {
@@ -422,27 +448,283 @@ app.get('/api/grupos', (_req, res) => {
 });
 
 // ============================================
-// ROTAS DE CLIENTES (MOCK)
+// ROTAS DE CLIENTES
 // ============================================
 
-app.get('/api/clientes', (_req, res) => {
-  res.json({ data: { clientes: [] } });
+// Cadastro público de cliente (via link público do vendedor)
+app.post('/api/clientes/publico/:linkPublico', async (req, res) => {
+  try {
+    const { linkPublico } = req.params;
+    const clienteData = req.body;
+
+    console.log('📥 Cadastro público recebido para link:', linkPublico);
+
+    // Buscar vendedor pelo link público
+    const vendedorResult = await pool.query(
+      'SELECT id, company_id, nome FROM usuarios WHERE link_publico = $1',
+      [linkPublico]
+    );
+
+    if (vendedorResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Link público não encontrado' });
+    }
+
+    const vendedor = vendedorResult.rows[0];
+
+    // Inserir cliente associado ao vendedor e empresa
+    const telefone = clienteData.telefone_celular || clienteData.telefone || '';
+    const result = await pool.query(
+      `INSERT INTO clientes (
+        nome, cpf, email, telefone, telefone_celular,
+        vendedor_id, company_id, etapa, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'novo_contato', NOW(), NOW())
+      RETURNING id, nome, email`,
+      [
+        clienteData.nome,
+        clienteData.cpf || null,
+        clienteData.email || null,
+        telefone,
+        clienteData.telefone_celular || null,
+        vendedor.id,
+        vendedor.company_id
+      ]
+    );
+
+    console.log('✅ Cliente cadastrado via link público:', result.rows[0]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Cadastro realizado com sucesso!',
+      data: {
+        cliente: result.rows[0],
+        vendedor_nome: vendedor.nome
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erro ao cadastrar cliente público:', error);
+    res.status(500).json({ error: 'Erro ao processar cadastro' });
+  }
 });
 
-app.get('/api/clientes/:id', (_req, res) => {
-  res.status(404).json({ error: 'Cliente não encontrado' });
+app.get('/api/clientes', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    // Buscar clientes da empresa
+    const result = await pool.query(
+      `SELECT c.*, u.nome as vendedor_nome
+       FROM clientes c
+       LEFT JOIN usuarios u ON c.vendedor_id = u.id
+       WHERE c.company_id = $1
+       ORDER BY c.created_at DESC`,
+      [decoded.company_id]
+    );
+
+    res.json({ data: { clientes: result.rows } });
+  } catch (error) {
+    console.error('Erro ao listar clientes:', error);
+    res.status(500).json({ error: 'Erro ao listar clientes' });
+  }
 });
 
-app.post('/api/clientes', (_req, res) => {
-  res.status(201).json({ message: 'Cliente criado', id: 1 });
+app.get('/api/clientes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    const result = await pool.query(
+      'SELECT * FROM clientes WHERE id = $1 AND company_id = $2',
+      [id, decoded.company_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    res.json({ data: { cliente: result.rows[0] } });
+  } catch (error) {
+    console.error('Erro ao buscar cliente:', error);
+    res.status(500).json({ error: 'Erro ao buscar cliente' });
+  }
 });
 
-app.put('/api/clientes/:id', (_req, res) => {
-  res.json({ message: 'Cliente atualizado' });
+app.post('/api/clientes', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const clienteData = req.body;
+    const telefone = clienteData.telefone_celular || clienteData.telefone || '';
+
+    const result = await pool.query(
+      `INSERT INTO clientes (
+        nome, cpf, email, telefone, telefone_celular,
+        vendedor_id, company_id, etapa, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'novo_contato', NOW(), NOW())
+      RETURNING *`,
+      [
+        clienteData.nome,
+        clienteData.cpf || null,
+        clienteData.email || null,
+        telefone,
+        clienteData.telefone_celular || null,
+        decoded.id,
+        decoded.company_id
+      ]
+    );
+
+    res.status(201).json({ data: { cliente: result.rows[0] } });
+  } catch (error) {
+    console.error('Erro ao criar cliente:', error);
+    res.status(500).json({ error: 'Erro ao criar cliente' });
+  }
 });
 
-app.patch('/api/clientes/:id/etapa', (_req, res) => {
-  res.json({ message: 'Etapa atualizada' });
+app.put('/api/clientes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const c = req.body;
+
+    const result = await pool.query(
+      `UPDATE clientes SET
+        nome = COALESCE($1, nome),
+        cpf = COALESCE($2, cpf),
+        email = COALESCE($3, email),
+        telefone = COALESCE($4, telefone),
+        telefone_celular = COALESCE($5, telefone_celular),
+        etapa = COALESCE($6, etapa),
+        data_nascimento = COALESCE($7, data_nascimento),
+        estado_civil = COALESCE($8, estado_civil),
+        nacionalidade = COALESCE($9, nacionalidade),
+        cidade_nascimento = COALESCE($10, cidade_nascimento),
+        nome_mae = COALESCE($11, nome_mae),
+        profissao = COALESCE($12, profissao),
+        remuneracao = COALESCE($13, remuneracao),
+        telefone_residencial = COALESCE($14, telefone_residencial),
+        telefone_comercial = COALESCE($15, telefone_comercial),
+        celular_2 = COALESCE($16, celular_2),
+        tipo_documento = COALESCE($17, tipo_documento),
+        numero_documento = COALESCE($18, numero_documento),
+        orgao_emissor = COALESCE($19, orgao_emissor),
+        data_emissao = COALESCE($20, data_emissao),
+        cpf_conjuge = COALESCE($21, cpf_conjuge),
+        nome_conjuge = COALESCE($22, nome_conjuge),
+        valor_carta = COALESCE($23, valor_carta),
+        administradora = COALESCE($24, administradora),
+        grupo = COALESCE($25, grupo),
+        cota = COALESCE($26, cota),
+        aceita_seguro = COALESCE($27, aceita_seguro),
+        cep = COALESCE($28, cep),
+        tipo_logradouro = COALESCE($29, tipo_logradouro),
+        endereco = COALESCE($30, endereco),
+        numero_endereco = COALESCE($31, numero_endereco),
+        complemento = COALESCE($32, complemento),
+        bairro = COALESCE($33, bairro),
+        cidade = COALESCE($34, cidade),
+        estado = COALESCE($35, estado),
+        observacoes = COALESCE($36, observacoes),
+        updated_at = NOW()
+      WHERE id = $37 AND company_id = $38
+      RETURNING *`,
+      [
+        c.nome,
+        c.cpf,
+        c.email,
+        c.telefone,
+        c.telefone_celular,
+        c.etapa,
+        c.data_nascimento || null,
+        c.estado_civil,
+        c.nacionalidade,
+        c.cidade_nascimento,
+        c.nome_mae,
+        c.profissao,
+        c.remuneracao ? parseFloat(c.remuneracao) : null,
+        c.telefone_residencial,
+        c.telefone_comercial,
+        c.celular_2,
+        c.tipo_documento,
+        c.numero_documento,
+        c.orgao_emissor,
+        c.data_emissao || null,
+        c.cpf_conjuge,
+        c.nome_conjuge,
+        c.valor_carta ? parseFloat(c.valor_carta) : null,
+        c.administradora,
+        c.grupo,
+        c.cota,
+        c.aceita_seguro,
+        c.cep,
+        c.tipo_logradouro,
+        c.endereco,
+        c.numero_endereco,
+        c.complemento,
+        c.bairro,
+        c.cidade,
+        c.estado,
+        c.observacoes,
+        id,
+        decoded.company_id
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    res.json({ data: { cliente: result.rows[0] } });
+  } catch (error) {
+    console.error('Erro ao atualizar cliente:', error);
+    res.status(500).json({ error: 'Erro ao atualizar cliente' });
+  }
+});
+
+app.patch('/api/clientes/:id/etapa', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { etapa } = req.body;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    const result = await pool.query(
+      `UPDATE clientes SET etapa = $1, updated_at = NOW()
+       WHERE id = $2 AND company_id = $3
+       RETURNING *`,
+      [etapa, id, decoded.company_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    res.json({ data: { cliente: result.rows[0] } });
+  } catch (error) {
+    console.error('Erro ao atualizar etapa:', error);
+    res.status(500).json({ error: 'Erro ao atualizar etapa' });
+  }
 });
 
 app.delete('/api/clientes/:id', (_req, res) => {

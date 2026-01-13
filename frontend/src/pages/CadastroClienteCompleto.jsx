@@ -235,7 +235,8 @@ const CadastroClienteCompleto = () => {
         // Acesso público: usar rota pública específica
         console.log('🌐 Usando rota pública com link:', linkPublico);
         const axios = (await import('axios')).default;
-        response = await axios.post(`http://localhost:3001/api/clientes/publico/${linkPublico}`, formData);
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+        response = await axios.post(`${API_URL}/clientes/publico/${linkPublico}`, formData);
       } else {
         // Acesso autenticado: usar rota normal
         console.log('🔐 Usando rota autenticada');
@@ -275,6 +276,31 @@ const CadastroClienteCompleto = () => {
       setLoading(false);
     }
   };
+
+  // Tela de sucesso para cadastro público
+  if (isPublicAccess && sucesso) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">Cadastro realizado com sucesso!</h1>
+          <p className="text-gray-600 mb-6">Em breve entraremos em contato.</p>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-green-700 text-sm">
+              Obrigado por se cadastrar! Nossa equipe entrará em contato em breve para dar continuidade ao seu atendimento.
+            </p>
+          </div>
+          <div className="mt-6">
+            <Logo className="w-10 h-10 mx-auto" textSize="text-lg" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

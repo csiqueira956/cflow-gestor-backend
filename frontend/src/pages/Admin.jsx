@@ -78,7 +78,7 @@ const Admin = () => {
         equipesAPI.listar(),
       ]);
 
-      const equipesData = equipesResponse.data.equipes;
+      const equipesData = equipesResponse.data.data?.equipes || [];
 
       console.log('📋 Equipes recebidas da API:', JSON.stringify(equipesData, null, 2));
 
@@ -87,7 +87,7 @@ const Admin = () => {
         console.log(`   ANTES setEquipes - Equipe[${idx}]: id=${eq.id} (${typeof eq.id}), nome=${eq.nome}`);
       });
 
-      setVendedores(vendedoresResponse.data.vendedores);
+      setVendedores(vendedoresResponse.data.data?.vendedores || []);
       setEquipes(equipesData);
 
       // Verificar o que foi setado (será visível no próximo render)
