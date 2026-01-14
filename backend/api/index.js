@@ -815,11 +815,29 @@ app.get('/api/usuarios/vendedores', async (req, res) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
 
+    // Super admin pode ver todos os vendedores
+    if (decoded.role === 'super_admin' && !decoded.company_id) {
+      const result = await pool.query(`
+        SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao,
+               u.celular, u.equipe_id, e.nome as equipe_nome, c.nome as empresa_nome, u.created_at
+        FROM usuarios u
+        LEFT JOIN equipes e ON u.equipe_id = e.id
+        LEFT JOIN companies c ON u.company_id = c.id
+        WHERE u.role = 'vendedor'
+        ORDER BY c.nome, u.nome
+      `);
+      return res.json({ data: { vendedores: result.rows } });
+    }
+
     // Buscar vendedores da mesma empresa
-    const result = await pool.query(
-      "SELECT id, nome, email, role, created_at FROM usuarios WHERE company_id = $1 AND role = 'vendedor' ORDER BY nome",
-      [decoded.company_id]
-    );
+    const result = await pool.query(`
+      SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao,
+             u.celular, u.equipe_id, e.nome as equipe_nome, u.created_at
+      FROM usuarios u
+      LEFT JOIN equipes e ON u.equipe_id = e.id
+      WHERE u.company_id = $1 AND u.role = 'vendedor'
+      ORDER BY u.nome
+    `, [decoded.company_id]);
 
     res.json({ data: { vendedores: result.rows } });
   } catch (error) {
@@ -829,43 +847,234 @@ app.get('/api/usuarios/vendedores', async (req, res) => {
 });
 
 // ============================================
-// ROTAS DE EQUIPES (MOCK)
+// ROTAS DE EQUIPES
 // ============================================
 
-app.get('/api/equipes', (_req, res) => {
-  res.json({ data: { equipes: [] } });
+app.get('/api/equipes', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    // Super admin pode ver todas as equipes
+    if (decoded.role === 'super_admin' && !decoded.company_id) {
+      const result = await pool.query(`
+        SELECT e.*, c.nome as empresa_nome
+        FROM equipes e
+        LEFT JOIN companies c ON e.company_id = c.id
+        ORDER BY c.nome ASC, e.nome ASC
+      `);
+      return res.json({ data: { equipes: result.rows } });
+    }
+
+    const result = await pool.query(
+      'SELECT * FROM equipes WHERE company_id = $1 ORDER BY nome ASC',
+      [decoded.company_id]
+    );
+    res.json({ data: { equipes: result.rows } });
+  } catch (error) {
+    console.error('Erro ao listar equipes:', error);
+    res.status(500).json({ error: 'Erro ao listar equipes' });
+  }
 });
 
-app.post('/api/equipes', (_req, res) => {
-  res.status(201).json({ message: 'Equipe criada', id: 1 });
+app.post('/api/equipes', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { nome, descricao } = req.body;
+
+    if (!nome) {
+      return res.status(400).json({ error: 'Nome é obrigatório' });
+    }
+
+    const result = await pool.query(
+      'INSERT INTO equipes (nome, descricao, company_id) VALUES ($1, $2, $3) RETURNING *',
+      [nome, descricao, decoded.company_id]
+    );
+
+    res.status(201).json({ message: 'Equipe criada', equipe: result.rows[0] });
+  } catch (error) {
+    console.error('Erro ao criar equipe:', error);
+    res.status(500).json({ error: 'Erro ao criar equipe' });
+  }
 });
 
-app.put('/api/equipes/:id', (_req, res) => {
-  res.json({ message: 'Equipe atualizada' });
+app.put('/api/equipes/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { id } = req.params;
+    const { nome, descricao } = req.body;
+
+    const result = await pool.query(
+      'UPDATE equipes SET nome = $1, descricao = $2, updated_at = NOW() WHERE id = $3 AND company_id = $4 RETURNING *',
+      [nome, descricao, id, decoded.company_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Equipe não encontrada' });
+    }
+
+    res.json({ message: 'Equipe atualizada', equipe: result.rows[0] });
+  } catch (error) {
+    console.error('Erro ao atualizar equipe:', error);
+    res.status(500).json({ error: 'Erro ao atualizar equipe' });
+  }
 });
 
-app.delete('/api/equipes/:id', (_req, res) => {
-  res.json({ message: 'Equipe deletada' });
+app.delete('/api/equipes/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM equipes WHERE id = $1 AND company_id = $2 RETURNING id',
+      [id, decoded.company_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Equipe não encontrada' });
+    }
+
+    res.json({ message: 'Equipe deletada' });
+  } catch (error) {
+    console.error('Erro ao deletar equipe:', error);
+    res.status(500).json({ error: 'Erro ao deletar equipe' });
+  }
 });
 
 // ============================================
-// ROTAS DE ADMINISTRADORAS (MOCK)
+// ROTAS DE ADMINISTRADORAS
 // ============================================
 
-app.get('/api/administradoras', (_req, res) => {
-  res.json({ data: { administradoras: [] } });
+app.get('/api/administradoras', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    // Super admin pode ver todas as administradoras
+    if (decoded.role === 'super_admin' && !decoded.company_id) {
+      const result = await pool.query(`
+        SELECT a.*, c.nome as empresa_nome
+        FROM administradoras a
+        LEFT JOIN companies c ON a.company_id = c.id
+        ORDER BY c.nome ASC, a.nome ASC
+      `);
+      return res.json({ data: { administradoras: result.rows } });
+    }
+
+    const result = await pool.query(
+      'SELECT * FROM administradoras WHERE company_id = $1 ORDER BY nome ASC',
+      [decoded.company_id]
+    );
+    res.json({ data: { administradoras: result.rows } });
+  } catch (error) {
+    console.error('Erro ao listar administradoras:', error);
+    res.status(500).json({ error: 'Erro ao listar administradoras' });
+  }
 });
 
-app.post('/api/administradoras', (_req, res) => {
-  res.status(201).json({ message: 'Administradora criada', id: 1 });
+app.post('/api/administradoras', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { nome, nome_contato, celular, comissionamento_recebido, comissionamento_pago } = req.body;
+
+    if (!nome) {
+      return res.status(400).json({ error: 'Nome é obrigatório' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO administradoras (nome, nome_contato, celular, comissionamento_recebido, comissionamento_pago, company_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [nome, nome_contato, celular, comissionamento_recebido, comissionamento_pago, decoded.company_id]
+    );
+
+    res.status(201).json({ message: 'Administradora criada', administradora: result.rows[0] });
+  } catch (error) {
+    console.error('Erro ao criar administradora:', error);
+    res.status(500).json({ error: 'Erro ao criar administradora' });
+  }
 });
 
-app.put('/api/administradoras/:id', (_req, res) => {
-  res.json({ message: 'Administradora atualizada' });
+app.put('/api/administradoras/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { id } = req.params;
+    const { nome, nome_contato, celular, comissionamento_recebido, comissionamento_pago } = req.body;
+
+    const result = await pool.query(
+      `UPDATE administradoras SET nome = $1, nome_contato = $2, celular = $3,
+       comissionamento_recebido = $4, comissionamento_pago = $5, updated_at = NOW()
+       WHERE id = $6 AND company_id = $7 RETURNING *`,
+      [nome, nome_contato, celular, comissionamento_recebido, comissionamento_pago, id, decoded.company_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Administradora não encontrada' });
+    }
+
+    res.json({ message: 'Administradora atualizada', administradora: result.rows[0] });
+  } catch (error) {
+    console.error('Erro ao atualizar administradora:', error);
+    res.status(500).json({ error: 'Erro ao atualizar administradora' });
+  }
 });
 
-app.delete('/api/administradoras/:id', (_req, res) => {
-  res.json({ message: 'Administradora deletada' });
+app.delete('/api/administradoras/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM administradoras WHERE id = $1 AND company_id = $2 RETURNING id',
+      [id, decoded.company_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Administradora não encontrada' });
+    }
+
+    res.json({ message: 'Administradora deletada' });
+  } catch (error) {
+    console.error('Erro ao deletar administradora:', error);
+    res.status(500).json({ error: 'Erro ao deletar administradora' });
+  }
 });
 
 // ============================================
