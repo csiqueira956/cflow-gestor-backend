@@ -371,7 +371,7 @@ class Cliente {
 
   // Estatísticas por etapa
   // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
-  static async estatisticasPorEtapa(companyId, vendedorId = null) {
+  static async estatisticasPorEtapa(companyId, vendedorId = null, vendedoresIds = null) {
     if (!companyId) {
       throw new Error('company_id é obrigatório para estatísticas');
     }
@@ -383,10 +383,16 @@ class Cliente {
     `;
 
     const values = [companyId];
+    let paramCount = 2;
 
     if (vendedorId) {
-      query += ' AND vendedor_id = $2';
+      query += ` AND vendedor_id = $${paramCount}`;
       values.push(vendedorId);
+    } else if (vendedoresIds && vendedoresIds.length > 0) {
+      // Filtrar por array de vendedores (para gerentes)
+      const placeholders = vendedoresIds.map((_, i) => `$${paramCount + i}`).join(', ');
+      query += ` AND vendedor_id IN (${placeholders})`;
+      values.push(...vendedoresIds);
     }
 
     query += ' GROUP BY etapa';

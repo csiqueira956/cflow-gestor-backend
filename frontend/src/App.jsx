@@ -43,6 +43,31 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+// Componente para rotas protegidas por role
+// allowedRoles: array de roles permitidos (ex: ['admin', 'super_admin'])
+const RoleProtectedRoute = ({ children, allowedRoles }) => {
+  const { usuario, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-600">Carregando...</div>
+      </div>
+    );
+  }
+
+  if (!usuario) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Verificar se o usuário tem permissão
+  if (!allowedRoles.includes(usuario.role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
 // Componente para redirecionar usuários autenticados
 const PublicRoute = ({ children }) => {
   const { usuario, loading } = useAuth();
@@ -127,9 +152,9 @@ function AppRoutes() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={['admin', 'super_admin']}>
               <Admin />
-            </ProtectedRoute>
+            </RoleProtectedRoute>
           }
         />
 
@@ -172,45 +197,45 @@ function AppRoutes() {
         <Route
           path="/configuracoes"
           element={
-            <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={['admin', 'gerente', 'super_admin']}>
               <Configuracoes />
-            </ProtectedRoute>
+            </RoleProtectedRoute>
           }
         />
 
         <Route
           path="/configuracoes/vendedores"
           element={
-            <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={['admin', 'gerente', 'super_admin']}>
               <Vendedores />
-            </ProtectedRoute>
+            </RoleProtectedRoute>
           }
         />
 
         <Route
           path="/configuracoes/equipes"
           element={
-            <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={['admin', 'gerente', 'super_admin']}>
               <Equipes />
-            </ProtectedRoute>
+            </RoleProtectedRoute>
           }
         />
 
         <Route
           path="/configuracoes/administradoras"
           element={
-            <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={['admin', 'gerente', 'super_admin']}>
               <Administradoras />
-            </ProtectedRoute>
+            </RoleProtectedRoute>
           }
         />
 
         <Route
           path="/configuracoes/metas"
           element={
-            <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={['admin', 'gerente', 'super_admin']}>
               <Metas />
-            </ProtectedRoute>
+            </RoleProtectedRoute>
           }
         />
 
@@ -226,9 +251,9 @@ function AppRoutes() {
         <Route
           path="/super-admin"
           element={
-            <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={['super_admin']}>
               <SuperAdminPanel />
-            </ProtectedRoute>
+            </RoleProtectedRoute>
           }
         />
 

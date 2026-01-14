@@ -122,6 +122,51 @@ class Usuario {
     return result.rows;
   }
 
+  // Listar TODOS os vendedores (apenas para super_admin)
+  static async listAllVendedores() {
+    const query = `
+      SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao, u.celular, u.equipe, u.equipe_id,
+             e.nome as equipe_nome, c.nome as empresa_nome, u.created_at
+      FROM usuarios u
+      LEFT JOIN equipes e ON u.equipe_id = e.id
+      LEFT JOIN companies c ON u.company_id = c.id
+      WHERE u.role = 'vendedor'
+      ORDER BY c.nome, u.nome
+    `;
+    const result = await pool.query(query);
+    return result.rows;
+  }
+
+  // Listar TODOS os gerentes (apenas para super_admin)
+  static async listAllGerentes() {
+    const query = `
+      SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao, u.celular, u.equipe, u.equipe_id,
+             e.nome as equipe_nome, c.nome as empresa_nome, u.created_at
+      FROM usuarios u
+      LEFT JOIN equipes e ON u.equipe_id = e.id
+      LEFT JOIN companies c ON u.company_id = c.id
+      WHERE u.role = 'gerente'
+      ORDER BY c.nome, u.nome
+    `;
+    const result = await pool.query(query);
+    return result.rows;
+  }
+
+  // Listar TODOS os usuários não-admin (apenas para super_admin)
+  static async listAllUsuarios() {
+    const query = `
+      SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao, u.celular, u.equipe, u.equipe_id,
+             e.nome as equipe_nome, c.nome as empresa_nome, u.created_at
+      FROM usuarios u
+      LEFT JOIN equipes e ON u.equipe_id = e.id
+      LEFT JOIN companies c ON u.company_id = c.id
+      WHERE u.role IN ('vendedor', 'gerente')
+      ORDER BY c.nome, u.role DESC, u.nome
+    `;
+    const result = await pool.query(query);
+    return result.rows;
+  }
+
   // Buscar vendedores por equipe_id
   // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
   static async findVendedoresByEquipeId(equipe_id, companyId = null) {

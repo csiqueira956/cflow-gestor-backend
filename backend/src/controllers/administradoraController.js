@@ -3,8 +3,14 @@ import Administradora from '../models/Administradora.js';
 // Listar todas as administradoras
 export const listarAdministradoras = async (req, res) => {
   try {
-    const { company_id } = req.user;
+    const { company_id, role } = req.user;
     const companyId = req.companyId || company_id;
+
+    // Super admin pode ver todas as administradoras de todas as empresas
+    if (role === 'super_admin' && !companyId) {
+      const administradoras = await Administradora.listAll();
+      return res.json({ administradoras });
+    }
 
     if (!companyId) {
       return res.status(403).json({ error: 'Empresa não identificada' });

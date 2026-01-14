@@ -4,9 +4,11 @@ import { generateToken } from '../middleware/auth.js';
 import pool from '../config/database.js';
 
 // Registro de novo usuário
+// SEGURANÇA: Esta rota é pública - role é sempre 'vendedor'
+// Para criar usuários com outros roles, use as rotas protegidas de admin
 export const register = async (req, res) => {
   try {
-    const { nome, email, senha, role, tipo_usuario, percentual_comissao, celular, equipe } = req.body;
+    const { nome, email, senha, tipo_usuario, percentual_comissao, celular, equipe } = req.body;
 
     // Validação básica
     if (!nome || !email || !senha) {
@@ -22,16 +24,17 @@ export const register = async (req, res) => {
     // Hash da senha
     const senha_hash = await bcrypt.hash(senha, 10);
 
-    // Criar usuário (equipe é o equipe_id)
+    // SEGURANÇA: Role é sempre 'vendedor' para registro público
+    // Roles privilegiados (admin, gerente, super_admin) só podem ser atribuídos por admin
     const novoUsuario = await Usuario.create({
       nome,
       email,
       senha_hash,
-      role: role || 'vendedor',
+      role: 'vendedor', // Forçado por segurança - ignora qualquer role do body
       tipo_usuario,
       percentual_comissao,
       celular,
-      equipe_id: equipe ? parseInt(equipe, 10) : null  // Converter para inteiro ou null
+      equipe_id: equipe ? parseInt(equipe, 10) : null
     });
 
     res.status(201).json({

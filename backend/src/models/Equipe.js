@@ -39,6 +39,19 @@ class Equipe {
     return result.rows;
   }
 
+  // Listar TODAS as equipes (apenas para super_admin)
+  static async listAll() {
+    const query = `
+      SELECT e.*, c.nome as empresa_nome
+      FROM equipes e
+      LEFT JOIN companies c ON e.company_id = c.id
+      ORDER BY c.nome ASC, e.nome ASC
+    `;
+
+    const result = await pool.query(query);
+    return result.rows;
+  }
+
   // Buscar equipe por ID
   // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
   static async findById(id, companyId) {

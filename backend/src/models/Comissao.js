@@ -72,6 +72,13 @@ class Comissao {
         paramCount++;
       }
 
+      // Filtro por equipe (para gerentes verem toda sua equipe)
+      if (filters.equipe_id) {
+        query += ` AND u.equipe_id = $${paramCount}`;
+        values.push(filters.equipe_id);
+        paramCount++;
+      }
+
       if (filters.status) {
         query += ` AND c.status = $${paramCount}`;
         values.push(filters.status);
@@ -276,6 +283,13 @@ class Comissao {
 
     const result = await pool.query(query, [comissaoId]);
     return result.rows;
+  }
+
+  // Buscar parcela por ID
+  static async findParcelaById(id) {
+    const query = 'SELECT * FROM parcelas_comissao WHERE id = $1';
+    const result = await pool.query(query, [id]);
+    return result.rows[0];
   }
 
   // Estatísticas de comissões por vendedor

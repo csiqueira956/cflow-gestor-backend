@@ -59,6 +59,19 @@ class Administradora {
     return result.rows;
   }
 
+  // Listar TODAS as administradoras (apenas para super_admin)
+  static async listAll() {
+    const query = `
+      SELECT a.*, c.nome as empresa_nome
+      FROM administradoras a
+      LEFT JOIN companies c ON a.company_id = c.id
+      ORDER BY c.nome ASC, a.nome ASC
+    `;
+
+    const result = await pool.query(query);
+    return result.rows;
+  }
+
   // Buscar administradora por ID
   // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
   static async findById(id, companyId) {

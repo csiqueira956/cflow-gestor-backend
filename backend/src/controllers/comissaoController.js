@@ -4,7 +4,7 @@ import Cliente from '../models/Cliente.js';
 // Listar comissões
 export const listarComissoes = async (req, res) => {
   try {
-    const { role, id: userId, company_id } = req.user;
+    const { role, id: userId, company_id, equipe_id } = req.user;
     const companyId = req.companyId || company_id;
 
     if (!companyId) {
@@ -13,13 +13,23 @@ export const listarComissoes = async (req, res) => {
 
     const filters = {};
 
-    // Se não for admin, filtrar apenas comissões do próprio vendedor
-    if (role !== 'admin') {
+    // SEGURANÇA: Aplicar escopo correto por role
+    if (role === 'vendedor') {
+      // Vendedor vê apenas suas próprias comissões
       filters.vendedor_id = userId;
+    } else if (role === 'gerente') {
+      // Gerente vê comissões de toda sua equipe
+      if (equipe_id) {
+        filters.equipe_id = equipe_id;
+      } else {
+        // Se gerente não tem equipe, só vê suas próprias comissões
+        filters.vendedor_id = userId;
+      }
     }
+    // Admin e super_admin veem todas as comissões da empresa
 
-    // Aplicar filtros de query params se fornecidos
-    if (req.query.vendedor_id) {
+    // SEGURANÇA: Apenas admin/super_admin podem filtrar por vendedor específico
+    if (req.query.vendedor_id && (role === 'admin' || role === 'super_admin')) {
       filters.vendedor_id = req.query.vendedor_id;
     }
 
@@ -252,6 +262,14 @@ export const deletarComissao = async (req, res) => {
 export const atualizarParcela = async (req, res) => {
   try {
     const { id } = req.params;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    // SEGURANÇA: Validar tenant
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
     const {
       valor_parcela,
       data_vencimento,
@@ -260,6 +278,18 @@ export const atualizarParcela = async (req, res) => {
       observacao
     } = req.body;
 
+    // SEGURANÇA: Verificar se a parcela pertence a uma comissão da empresa
+    const parcela = await Comissao.findParcelaById(id);
+    if (!parcela) {
+      return res.status(404).json({ error: 'Parcela não encontrada' });
+    }
+
+    // Buscar a comissão associada para validar o tenant
+    const comissao = await Comissao.findById(parcela.comissao_id, companyId);
+    if (!comissao) {
+      return res.status(403).json({ error: 'Sem permissão para atualizar esta parcela' });
+    }
+
     const parcelaAtualizada = await Comissao.updateParcela(id, {
       valor_parcela,
       data_vencimento,
@@ -267,10 +297,6 @@ export const atualizarParcela = async (req, res) => {
       status,
       observacao
     });
-
-    if (!parcelaAtualizada) {
-      return res.status(404).json({ error: 'Parcela não encontrada' });
-    }
 
     res.json({
       message: 'Parcela atualizada com sucesso',

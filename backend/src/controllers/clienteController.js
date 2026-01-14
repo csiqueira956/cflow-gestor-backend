@@ -57,19 +57,39 @@ export const listarClientes = async (req, res) => {
 export const buscarCliente = async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, id: vendedorId, company_id } = req.user;
+    const { role, id: vendedorId, equipe_id, company_id } = req.user;
     const companyId = req.companyId || company_id;
 
     if (!companyId) {
       return res.status(403).json({ error: 'Empresa não identificada' });
     }
 
-    const vendedorIdFiltro = role === 'vendedor' ? vendedorId : null;
+    // SEGURANÇA: Aplicar escopo correto por role
+    let vendedorIdFiltro = null;
+    let vendedoresIds = null;
+
+    if (role === 'vendedor') {
+      vendedorIdFiltro = vendedorId;
+    } else if (role === 'gerente') {
+      // Gerente só pode ver clientes da sua equipe
+      if (!equipe_id) {
+        return res.status(403).json({ error: 'Gerente sem equipe associada' });
+      }
+      const Usuario = (await import('../models/Usuario.js')).default;
+      const vendedoresEquipe = await Usuario.findVendedoresByEquipeId(equipe_id);
+      vendedoresIds = vendedoresEquipe.map(v => v.id);
+    }
+    // Admin e super_admin podem ver qualquer cliente
 
     const cliente = await Cliente.findById(id, companyId, vendedorIdFiltro);
 
     if (!cliente) {
       return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    // SEGURANÇA: Verificar se gerente pode acessar este cliente
+    if (role === 'gerente' && vendedoresIds && !vendedoresIds.includes(cliente.vendedor_id)) {
+      return res.status(403).json({ error: 'Sem permissão para acessar este cliente' });
     }
 
     res.json(cliente);
@@ -130,7 +150,7 @@ export const criarCliente = async (req, res) => {
 export const atualizarCliente = async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, id: vendedorId, company_id } = req.user;
+    const { role, id: vendedorId, equipe_id, company_id } = req.user;
     const companyId = req.companyId || company_id;
     const clienteData = req.body;
 
@@ -148,7 +168,30 @@ export const atualizarCliente = async (req, res) => {
       clienteData.cpf = clienteData.cpf.replace(/[^\d]/g, '');
     }
 
-    const vendedorIdFiltro = role === 'vendedor' ? vendedorId : null;
+    // SEGURANÇA: Aplicar escopo correto por role
+    let vendedorIdFiltro = null;
+    let vendedoresIds = null;
+
+    if (role === 'vendedor') {
+      vendedorIdFiltro = vendedorId;
+    } else if (role === 'gerente') {
+      // Gerente só pode editar clientes da sua equipe
+      if (!equipe_id) {
+        return res.status(403).json({ error: 'Gerente sem equipe associada' });
+      }
+      const Usuario = (await import('../models/Usuario.js')).default;
+      const vendedoresEquipe = await Usuario.findVendedoresByEquipeId(equipe_id);
+      vendedoresIds = vendedoresEquipe.map(v => v.id);
+
+      // Buscar cliente primeiro para verificar permissão
+      const clienteExistente = await Cliente.findById(id, companyId, null);
+      if (!clienteExistente) {
+        return res.status(404).json({ error: 'Cliente não encontrado' });
+      }
+      if (!vendedoresIds.includes(clienteExistente.vendedor_id)) {
+        return res.status(403).json({ error: 'Sem permissão para editar este cliente' });
+      }
+    }
 
     const clienteAtualizado = await Cliente.update(id, clienteData, companyId, vendedorIdFiltro);
 
@@ -171,7 +214,7 @@ export const atualizarEtapa = async (req, res) => {
   try {
     const { id } = req.params;
     const { etapa } = req.body;
-    const { role, id: vendedorId, company_id } = req.user;
+    const { role, id: vendedorId, equipe_id, company_id } = req.user;
     const companyId = req.companyId || company_id;
 
     if (!companyId) {
@@ -187,7 +230,29 @@ export const atualizarEtapa = async (req, res) => {
       return res.status(400).json({ error: 'Etapa inválida' });
     }
 
-    const vendedorIdFiltro = role === 'vendedor' ? vendedorId : null;
+    // SEGURANÇA: Aplicar escopo correto por role
+    let vendedorIdFiltro = null;
+
+    if (role === 'vendedor') {
+      vendedorIdFiltro = vendedorId;
+    } else if (role === 'gerente') {
+      // Gerente só pode atualizar etapa de clientes da sua equipe
+      if (!equipe_id) {
+        return res.status(403).json({ error: 'Gerente sem equipe associada' });
+      }
+      const Usuario = (await import('../models/Usuario.js')).default;
+      const vendedoresEquipe = await Usuario.findVendedoresByEquipeId(equipe_id);
+      const vendedoresIds = vendedoresEquipe.map(v => v.id);
+
+      // Buscar cliente primeiro para verificar permissão
+      const clienteExistente = await Cliente.findById(id, companyId, null);
+      if (!clienteExistente) {
+        return res.status(404).json({ error: 'Cliente não encontrado' });
+      }
+      if (!vendedoresIds.includes(clienteExistente.vendedor_id)) {
+        return res.status(403).json({ error: 'Sem permissão para editar este cliente' });
+      }
+    }
 
     const clienteAtualizado = await Cliente.updateEtapa(id, etapa, companyId, vendedorIdFiltro);
 
@@ -209,14 +274,36 @@ export const atualizarEtapa = async (req, res) => {
 export const deletarCliente = async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, id: vendedorId, company_id } = req.user;
+    const { role, id: vendedorId, equipe_id, company_id } = req.user;
     const companyId = req.companyId || company_id;
 
     if (!companyId) {
       return res.status(403).json({ error: 'Empresa não identificada' });
     }
 
-    const vendedorIdFiltro = role === 'vendedor' ? vendedorId : null;
+    // SEGURANÇA: Aplicar escopo correto por role
+    let vendedorIdFiltro = null;
+
+    if (role === 'vendedor') {
+      vendedorIdFiltro = vendedorId;
+    } else if (role === 'gerente') {
+      // Gerente só pode deletar clientes da sua equipe
+      if (!equipe_id) {
+        return res.status(403).json({ error: 'Gerente sem equipe associada' });
+      }
+      const Usuario = (await import('../models/Usuario.js')).default;
+      const vendedoresEquipe = await Usuario.findVendedoresByEquipeId(equipe_id);
+      const vendedoresIds = vendedoresEquipe.map(v => v.id);
+
+      // Buscar cliente primeiro para verificar permissão
+      const clienteExistente = await Cliente.findById(id, companyId, null);
+      if (!clienteExistente) {
+        return res.status(404).json({ error: 'Cliente não encontrado' });
+      }
+      if (!vendedoresIds.includes(clienteExistente.vendedor_id)) {
+        return res.status(403).json({ error: 'Sem permissão para deletar este cliente' });
+      }
+    }
 
     const clienteDeletado = await Cliente.delete(id, companyId, vendedorIdFiltro);
 
@@ -234,16 +321,33 @@ export const deletarCliente = async (req, res) => {
 // Estatísticas por etapa
 export const estatisticas = async (req, res) => {
   try {
-    const { role, id: vendedorId, company_id } = req.user;
+    const { role, id: vendedorId, equipe_id, company_id } = req.user;
     const companyId = req.companyId || company_id;
 
     if (!companyId) {
       return res.status(403).json({ error: 'Empresa não identificada' });
     }
 
-    const vendedorIdFiltro = role === 'vendedor' ? vendedorId : null;
+    // SEGURANÇA: Aplicar escopo correto por role
+    let vendedorIdFiltro = null;
+    let vendedoresIds = null;
 
-    const estatisticas = await Cliente.estatisticasPorEtapa(companyId, vendedorIdFiltro);
+    if (role === 'vendedor') {
+      vendedorIdFiltro = vendedorId;
+    } else if (role === 'gerente') {
+      // Gerente vê estatísticas de toda sua equipe
+      if (equipe_id) {
+        const Usuario = (await import('../models/Usuario.js')).default;
+        const vendedoresEquipe = await Usuario.findVendedoresByEquipeId(equipe_id);
+        vendedoresIds = vendedoresEquipe.map(v => v.id);
+      } else {
+        // Se gerente não tem equipe, vê apenas suas próprias estatísticas
+        vendedorIdFiltro = vendedorId;
+      }
+    }
+    // Admin e super_admin veem todas as estatísticas da empresa
+
+    const estatisticas = await Cliente.estatisticasPorEtapa(companyId, vendedorIdFiltro, vendedoresIds);
 
     res.json({ estatisticas });
   } catch (error) {

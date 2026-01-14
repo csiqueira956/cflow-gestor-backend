@@ -3,8 +3,14 @@ import Equipe from '../models/Equipe.js';
 // Listar todas as equipes
 export const listarEquipes = async (req, res) => {
   try {
-    const { company_id } = req.user;
+    const { company_id, role } = req.user;
     const companyId = req.companyId || company_id;
+
+    // Super admin pode ver todas as equipes de todas as empresas
+    if (role === 'super_admin' && !companyId) {
+      const equipes = await Equipe.listAll();
+      return res.json({ equipes });
+    }
 
     if (!companyId) {
       return res.status(403).json({ error: 'Empresa não identificada' });

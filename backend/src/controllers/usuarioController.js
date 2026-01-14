@@ -4,8 +4,17 @@ import Usuario from '../models/Usuario.js';
 // Listar todos os vendedores (apenas admin)
 export const listarVendedores = async (req, res) => {
   try {
-    const { company_id } = req.user;
+    const { company_id, role } = req.user;
     const companyId = req.companyId || company_id;
+
+    // Super admin pode ver todos os vendedores de todas as empresas
+    if (role === 'super_admin' && !companyId) {
+      const vendedores = await Usuario.listAllVendedores();
+      return res.json({
+        vendedores,
+        total: vendedores.length
+      });
+    }
 
     if (!companyId) {
       return res.status(403).json({ error: 'Empresa não identificada' });
@@ -25,8 +34,17 @@ export const listarVendedores = async (req, res) => {
 // Listar todos os gerentes (apenas admin)
 export const listarGerentes = async (req, res) => {
   try {
-    const { company_id } = req.user;
+    const { company_id, role } = req.user;
     const companyId = req.companyId || company_id;
+
+    // Super admin pode ver todos os gerentes de todas as empresas
+    if (role === 'super_admin' && !companyId) {
+      const gerentes = await Usuario.listAllGerentes();
+      return res.json({
+        gerentes,
+        total: gerentes.length
+      });
+    }
 
     if (!companyId) {
       return res.status(403).json({ error: 'Empresa não identificada' });
@@ -46,8 +64,17 @@ export const listarGerentes = async (req, res) => {
 // Listar todos os usuários não-admin (vendedores e gerentes)
 export const listarUsuarios = async (req, res) => {
   try {
-    const { company_id } = req.user;
+    const { company_id, role } = req.user;
     const companyId = req.companyId || company_id;
+
+    // Super admin pode ver todos os usuários de todas as empresas
+    if (role === 'super_admin' && !companyId) {
+      const usuarios = await Usuario.listAllUsuarios();
+      return res.json({
+        usuarios,
+        total: usuarios.length
+      });
+    }
 
     if (!companyId) {
       return res.status(403).json({ error: 'Empresa não identificada' });
