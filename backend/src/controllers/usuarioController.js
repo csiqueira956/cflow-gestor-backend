@@ -4,7 +4,14 @@ import Usuario from '../models/Usuario.js';
 // Listar todos os vendedores (apenas admin)
 export const listarVendedores = async (req, res) => {
   try {
-    const vendedores = await Usuario.listVendedores();
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const vendedores = await Usuario.listVendedores(companyId);
     res.json({
       vendedores,
       total: vendedores.length
@@ -18,7 +25,14 @@ export const listarVendedores = async (req, res) => {
 // Listar todos os gerentes (apenas admin)
 export const listarGerentes = async (req, res) => {
   try {
-    const gerentes = await Usuario.listGerentes();
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const gerentes = await Usuario.listGerentes(companyId);
     res.json({
       gerentes,
       total: gerentes.length
@@ -32,7 +46,14 @@ export const listarGerentes = async (req, res) => {
 // Listar todos os usuários não-admin (vendedores e gerentes)
 export const listarUsuarios = async (req, res) => {
   try {
-    const usuarios = await Usuario.listUsuarios();
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const usuarios = await Usuario.listUsuarios(companyId);
     res.json({
       usuarios,
       total: usuarios.length
@@ -47,7 +68,14 @@ export const listarUsuarios = async (req, res) => {
 export const buscarUsuario = async (req, res) => {
   try {
     const { id } = req.params;
-    const usuario = await Usuario.findById(id);
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const usuario = await Usuario.findById(id, companyId);
 
     if (!usuario) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
@@ -64,19 +92,14 @@ export const buscarUsuario = async (req, res) => {
 export const atualizarUsuario = async (req, res) => {
   try {
     const { id } = req.params;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
 
-    console.log('\n');
-    console.log('═'.repeat(80));
-    console.log('🔴🔴🔴 req.body COMPLETO RAW:');
-    console.log(JSON.stringify(req.body, null, 2));
-    console.log('═'.repeat(80));
-    console.log('\n');
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     const { nome, email, role, tipo_usuario, percentual_comissao, celular, equipe, senha } = req.body;
-
-    console.log('📝 Atualizando usuário ID:', id);
-    console.log('🔴 Campo req.body.equipe TIPO:', typeof equipe, 'VALOR:', JSON.stringify(equipe));
-    console.log('Dados recebidos:', { nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id: equipe, temSenha: !!senha });
 
     if (!nome || !email) {
       return res.status(400).json({ error: 'Nome e email são obrigatórios' });
@@ -95,16 +118,11 @@ export const atualizarUsuario = async (req, res) => {
 
     // Se uma nova senha foi fornecida, hash ela
     if (senha) {
-      console.log('🔐 Nova senha fornecida, fazendo hash...');
       const senhaHash = await bcrypt.hash(senha, 10);
       dadosAtualizacao.senha_hash = senhaHash;
     }
 
-    console.log('Dados para atualização:', { ...dadosAtualizacao, senha_hash: dadosAtualizacao.senha_hash ? '[HASH]' : undefined });
-
-    const usuarioAtualizado = await Usuario.update(id, dadosAtualizacao);
-
-    console.log('✅ Usuário atualizado com sucesso:', usuarioAtualizado?.nome);
+    const usuarioAtualizado = await Usuario.update(id, dadosAtualizacao, companyId);
 
     if (!usuarioAtualizado) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
@@ -124,29 +142,28 @@ export const atualizarUsuario = async (req, res) => {
 export const deletarUsuario = async (req, res) => {
   try {
     const { id } = req.params;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
 
-    console.log('🗑️ Tentando deletar usuário ID:', id);
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     // Verificar se o usuário existe
-    const usuario = await Usuario.findById(id);
+    const usuario = await Usuario.findById(id, companyId);
     if (!usuario) {
-      console.log('❌ Usuário não encontrado');
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
-    console.log('Deletando usuário:', usuario.nome);
-
-    const usuarioDeletado = await Usuario.delete(id);
+    const usuarioDeletado = await Usuario.delete(id, companyId);
 
     if (!usuarioDeletado) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
-    console.log('✅ Usuário deletado com sucesso');
     res.json({ message: 'Usuário deletado com sucesso' });
   } catch (error) {
-    console.error('❌ Erro ao deletar usuário:', error);
-    console.error('Detalhes do erro:', error.message);
+    console.error('Erro ao deletar usuário:', error);
 
     // Verificar se é erro de foreign key
     if (error.message && error.message.includes('FOREIGN KEY')) {
@@ -164,8 +181,6 @@ export const registrarVendedor = async (req, res) => {
   try {
     const { nome, email, celular, senha, convite_id } = req.body;
 
-    console.log('📝 Tentando registrar novo vendedor:', { nome, email, celular, convite_id });
-
     // Validações
     if (!nome || !email || !celular || !senha) {
       return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
@@ -180,6 +195,7 @@ export const registrarVendedor = async (req, res) => {
       return res.status(400).json({ error: 'ID de convite inválido' });
     }
 
+    // Buscar vendedor que enviou o convite (sem filtro de company pois é público)
     const vendedorConvite = await Usuario.findById(convite_id);
     if (!vendedorConvite) {
       return res.status(400).json({ error: 'Convite inválido' });
@@ -194,7 +210,7 @@ export const registrarVendedor = async (req, res) => {
     // Hash da senha
     const senhaHash = await bcrypt.hash(senha, 10);
 
-    // Criar novo vendedor
+    // Criar novo vendedor com o company_id do vendedor que enviou o convite
     const novoVendedor = await Usuario.create({
       nome,
       email,
@@ -204,9 +220,7 @@ export const registrarVendedor = async (req, res) => {
       tipo_usuario: 'vendedor',
       percentual_comissao: 0,
       equipe_id: vendedorConvite.equipe_id // Herdar a equipe do vendedor que enviou o convite
-    });
-
-    console.log('✅ Vendedor registrado com sucesso:', novoVendedor.nome);
+    }, vendedorConvite.company_id);
 
     // Remover senha_hash antes de retornar
     delete novoVendedor.senha_hash;
@@ -216,7 +230,7 @@ export const registrarVendedor = async (req, res) => {
       usuario: novoVendedor
     });
   } catch (error) {
-    console.error('❌ Erro ao registrar vendedor:', error);
+    console.error('Erro ao registrar vendedor:', error);
     res.status(500).json({ error: 'Erro ao registrar vendedor. Tente novamente.' });
   }
 };

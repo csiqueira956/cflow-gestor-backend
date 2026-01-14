@@ -143,4 +143,43 @@ export const billingAPI = {
   getDashboard: () => api.get('/billing/dashboard'),
 };
 
+// Funções de Super Admin (gerenciamento SaaS cross-tenant)
+export const superAdminAPI = {
+  // Empresas/Assinaturas
+  listarEmpresas: () => api.get('/admin/assinaturas/todas'),
+  detalhesEmpresa: (companyId) => api.get(`/admin/assinaturas/empresa/${companyId}`),
+  criarEmpresa: (empresaData) => api.post('/admin/assinaturas/criar-empresa', empresaData),
+  atualizarEmpresa: (companyId, empresaData) => api.put(`/admin/assinaturas/empresa/${companyId}`, empresaData),
+  deletarEmpresa: (companyId) => api.delete(`/admin/assinaturas/empresa/${companyId}`),
+  alterarStatusAssinatura: (data) => api.post('/admin/assinaturas/alterar-status', data),
+
+  // Cobranças Avulsas (Asaas)
+  gerarCobranca: (companyId, data) => api.post(`/admin/assinaturas/empresa/${companyId}/gerar-cobranca`, data),
+  historicoPagamentos: (companyId) => api.get(`/admin/assinaturas/empresa/${companyId}/pagamentos`),
+  consultarStatusPagamento: (paymentId) => api.get(`/admin/pagamentos/${paymentId}/status`),
+
+  // Assinaturas Recorrentes (Asaas)
+  criarAssinaturaRecorrente: (companyId, data) => api.post(`/admin/assinaturas/empresa/${companyId}/assinatura-recorrente`, data),
+  cancelarAssinaturaRecorrente: (companyId) => api.post(`/admin/assinaturas/empresa/${companyId}/cancelar-assinatura`),
+  atualizarAssinaturaRecorrente: (companyId, data) => api.put(`/admin/assinaturas/empresa/${companyId}/assinatura-recorrente`, data),
+  detalhesAssinaturaRecorrente: (companyId) => api.get(`/admin/assinaturas/empresa/${companyId}/assinatura-recorrente`),
+  faturasPendentes: (companyId) => api.get(`/admin/assinaturas/empresa/${companyId}/faturas-pendentes`),
+
+  // Planos
+  listarPlanos: () => api.get('/admin/assinaturas/planos'),
+  criarPlano: (planoData) => api.post('/admin/assinaturas/planos', planoData),
+  editarPlano: (planoId, planoData) => api.put(`/admin/assinaturas/planos/${planoId}`, planoData),
+  deletarPlano: (planoId) => api.delete(`/admin/assinaturas/planos/${planoId}`),
+
+  // Usuários de empresas
+  listarUsuariosEmpresa: (companyId) => api.get(`/admin/empresas/${companyId}/usuarios`),
+  criarUsuarioEmpresa: (companyId, userData) => api.post(`/admin/empresas/${companyId}/usuarios`, userData),
+  atualizarUsuario: (usuarioId, userData) => api.put(`/admin/usuarios/${usuarioId}`, userData),
+  deletarUsuario: (usuarioId) => api.delete(`/admin/usuarios/${usuarioId}`),
+  resetarSenhaUsuario: (usuarioId) => api.post(`/admin/usuarios/${usuarioId}/resetar-senha`),
+
+  // Notificações
+  executarVerificacoes: () => api.post('/admin/notifications/run-checks'),
+};
+
 export default api;

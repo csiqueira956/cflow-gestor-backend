@@ -44,21 +44,10 @@ const Admin = () => {
   }, [isAdmin, navigate]);
 
   useEffect(() => {
-    carregarDados().catch(error => {
-      console.error('Erro ao carregar dados iniciais:', error);
+    carregarDados().catch(() => {
       toast.error('Erro ao carregar dados');
     });
   }, []);
-
-  // Debug: monitorar mudanças no state equipes
-  useEffect(() => {
-    if (equipes.length > 0) {
-      console.log('🔍 State equipes atualizado:', equipes.length, 'equipes');
-      equipes.forEach((eq, idx) => {
-        console.log(`   State equipes[${idx}]: id=${eq.id} (${typeof eq.id}), nome=${eq.nome}`);
-      });
-    }
-  }, [equipes]);
 
   // Sincronizar com mudanças no localStorage
   useEffect(() => {
@@ -80,20 +69,9 @@ const Admin = () => {
 
       const equipesData = equipesResponse.data.data?.equipes || [];
 
-      console.log('📋 Equipes recebidas da API:', JSON.stringify(equipesData, null, 2));
-
-      // Validar estrutura das equipes ANTES de setar no state
-      equipesData.forEach((eq, idx) => {
-        console.log(`   ANTES setEquipes - Equipe[${idx}]: id=${eq.id} (${typeof eq.id}), nome=${eq.nome}`);
-      });
-
       setVendedores(vendedoresResponse.data.data?.vendedores || []);
       setEquipes(equipesData);
-
-      // Verificar o que foi setado (será visível no próximo render)
-      console.log('✅ State atualizado com', equipesData.length, 'equipes');
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -103,22 +81,12 @@ const Admin = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    // IMPORTANTE: Para o campo equipe, garantir que pegamos o value (ID) corretamente
     let finalValue = value;
 
     if (name === 'equipe' && e.target.selectedIndex > 0) {
-      // Pegar o value diretamente do option selecionado
       const selectedOption = e.target.options[e.target.selectedIndex];
       finalValue = selectedOption.value;
-
-      console.log(`🏷️ Equipe selecionada:`);
-      console.log(`   - e.target.value: "${value}"`);
-      console.log(`   - selectedOption.value: "${selectedOption.value}"`);
-      console.log(`   - selectedOption.text: "${selectedOption.text}"`);
-      console.log(`   - finalValue sendo usado: "${finalValue}"`);
     }
-
-    console.log(`🔄 Campo alterado: ${name} = "${finalValue}" (tipo: ${typeof finalValue})`);
 
     setFormData({
       ...formData,
@@ -137,15 +105,6 @@ const Admin = () => {
       return;
     }
 
-    console.log('🚀 handleSubmit - formData antes de enviar:', formData);
-    console.log('🚀 formData.equipe:', {
-      value: formData.equipe,
-      type: typeof formData.equipe,
-      isEmpty: formData.equipe === '',
-      isNull: formData.equipe === null,
-      isUndefined: formData.equipe === undefined
-    });
-
     try {
       if (editandoId) {
         // Atualizar vendedor existente
@@ -159,13 +118,10 @@ const Admin = () => {
           delete dadosAtualizacao.senha;
         }
 
-        console.log('📤 Enviando dados para atualização:', dadosAtualizacao);
-        console.log('📤 Especificamente equipe:', dadosAtualizacao.equipe);
         await usuariosAPI.atualizar(editandoId, dadosAtualizacao);
         toast.success('Vendedor atualizado com sucesso!');
       } else {
         // Criar novo vendedor
-        console.log('📤 Criando novo vendedor:', formData);
         await authAPI.register({
           ...formData,
           role: 'vendedor',
@@ -187,8 +143,7 @@ const Admin = () => {
       setShowModal(false);
 
       // Recarregar lista (sem bloquear o fechamento do modal)
-      carregarDados().catch(error => {
-        console.error('Erro ao recarregar dados:', error);
+      carregarDados().catch(() => {
         toast.error('Dados salvos, mas erro ao recarregar lista');
       });
     } catch (error) {
@@ -199,9 +154,8 @@ const Admin = () => {
   };
 
   const handleEdit = (vendedor) => {
-    console.log('✏️ Editando vendedor:', vendedor);
     setEditandoId(vendedor.id);
-    const formDataEditado = {
+    setFormData({
       nome: vendedor.nome,
       email: vendedor.email,
       senha: '', // Senha vazia, será atualizada apenas se preenchida
@@ -209,9 +163,7 @@ const Admin = () => {
       percentual_comissao: vendedor.percentual_comissao || '',
       celular: vendedor.celular || '',
       equipe: vendedor.equipe_id ? String(vendedor.equipe_id) : '', // Garantir que seja string
-    };
-    console.log('📝 FormData carregado:', formDataEditado);
-    setFormData(formDataEditado);
+    });
     setShowModal(true);
   };
 
@@ -233,7 +185,6 @@ const Admin = () => {
       // Recarregar dados após o delete
       await carregarDados();
     } catch (error) {
-      console.error('Erro ao deletar vendedor:', error);
       const errorMsg = error.response?.data?.error || 'Erro ao deletar vendedor';
       toast.error(errorMsg);
     } finally {
@@ -507,15 +458,12 @@ const Admin = () => {
                 >
                   <option value="">Selecione uma equipe...</option>
                   {equipes
-                    .filter(eq => eq && eq.id) // Garantir que tem ID válido
-                    .map((equipe) => {
-                      console.log(`🏷️ Renderizando opção: ID=${equipe.id} (${typeof equipe.id}), Nome=${equipe.nome}`);
-                      return (
-                        <option key={equipe.id} value={String(equipe.id)}>
-                          {equipe.nome}
-                        </option>
-                      );
-                    })}
+                    .filter(eq => eq && eq.id)
+                    .map((equipe) => (
+                      <option key={equipe.id} value={String(equipe.id)}>
+                        {equipe.nome}
+                      </option>
+                    ))}
                 </select>
               </div>
 

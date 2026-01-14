@@ -21,9 +21,29 @@ export const authenticateToken = (req, res, next) => {
   }
 };
 
-// Middleware para verificar se o usuário é admin
+// Middleware para verificar se o usuário é admin da empresa
 export const isAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
+  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Acesso negado. Apenas administradores.' });
+  }
+  next();
+};
+
+// Middleware para verificar se o usuário é super_admin (acesso cross-tenant)
+export const isSuperAdmin = (req, res, next) => {
+  if (req.user.role !== 'super_admin') {
+    return res.status(403).json({
+      error: 'Acesso negado',
+      message: 'Apenas super administradores podem acessar este recurso.'
+    });
+  }
+  req.isSuperAdmin = true;
+  next();
+};
+
+// Middleware para verificar se é admin OU super_admin
+export const isAdminOrSuperAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Acesso negado. Apenas administradores.' });
   }
   next();

@@ -6,7 +6,7 @@ import {
   createPlan,
   updatePlan
 } from '../controllers/plansController.js';
-import { verifyToken } from '../controllers/authController.js';
+import { authenticateToken, isSuperAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -16,7 +16,7 @@ router.get('/:idOrSlug', getPlan); // Buscar plano específico
 router.get('/compare/:planId1/:planId2', comparePlans); // Comparar planos
 
 // Rotas privadas (apenas super admin)
-router.post('/', verifyToken, createPlan); // Criar plano
-router.put('/:id', verifyToken, updatePlan); // Atualizar plano
+router.post('/', authenticateToken, isSuperAdmin, createPlan); // Criar plano
+router.put('/:id', authenticateToken, isSuperAdmin, updatePlan); // Atualizar plano
 
 export default router;

@@ -2,7 +2,12 @@ import pool from '../config/database.js';
 
 class Meta {
   // Criar nova meta
-  static async create(metaData) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async create(metaData, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para criar meta');
+    }
+
     const {
       titulo,
       descricao,
@@ -23,9 +28,10 @@ class Meta {
         equipe_id,
         valor_meta,
         mes_referencia,
-        status
+        status,
+        company_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `;
 
@@ -37,7 +43,8 @@ class Meta {
       equipe_id || null,
       valor_meta,
       mes_referencia,
-      status
+      status,
+      companyId
     ];
 
     const result = await pool.query(query, values);
@@ -45,7 +52,12 @@ class Meta {
   }
 
   // Listar todas as metas
-  static async list(filtros = {}) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async list(companyId, filtros = {}) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para listar metas');
+    }
+
     let query = `
       SELECT
         m.*,
@@ -54,11 +66,11 @@ class Meta {
       FROM metas m
       LEFT JOIN usuarios u ON m.vendedor_id = u.id
       LEFT JOIN equipes e ON m.equipe_id = e.id
-      WHERE 1=1
+      WHERE m.company_id = $1
     `;
 
-    const values = [];
-    let paramCount = 1;
+    const values = [companyId];
+    let paramCount = 2;
 
     if (filtros.tipo) {
       query += ` AND m.tipo = $${paramCount}`;
@@ -97,7 +109,12 @@ class Meta {
   }
 
   // Buscar meta por ID
-  static async findById(id) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async findById(id, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para buscar meta');
+    }
+
     const query = `
       SELECT
         m.*,
@@ -106,15 +123,20 @@ class Meta {
       FROM metas m
       LEFT JOIN usuarios u ON m.vendedor_id = u.id
       LEFT JOIN equipes e ON m.equipe_id = e.id
-      WHERE m.id = $1
+      WHERE m.id = $1 AND m.company_id = $2
     `;
 
-    const result = await pool.query(query, [id]);
+    const result = await pool.query(query, [id, companyId]);
     return result.rows[0];
   }
 
   // Atualizar meta
-  static async update(id, metaData) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async update(id, metaData, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para atualizar meta');
+    }
+
     const {
       titulo,
       descricao,
@@ -137,7 +159,7 @@ class Meta {
           mes_referencia = $7,
           status = $8,
           updated_at = CURRENT_TIMESTAMP
-      WHERE id = $9
+      WHERE id = $9 AND company_id = $10
       RETURNING *
     `;
 
@@ -150,7 +172,8 @@ class Meta {
       valor_meta,
       mes_referencia,
       status,
-      id
+      id,
+      companyId
     ];
 
     const result = await pool.query(query, values);
@@ -158,14 +181,19 @@ class Meta {
   }
 
   // Deletar meta
-  static async delete(id) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async delete(id, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para deletar meta');
+    }
+
     const query = `
       DELETE FROM metas
-      WHERE id = $1
+      WHERE id = $1 AND company_id = $2
       RETURNING id
     `;
 
-    const result = await pool.query(query, [id]);
+    const result = await pool.query(query, [id, companyId]);
     return result.rows[0];
   }
 }

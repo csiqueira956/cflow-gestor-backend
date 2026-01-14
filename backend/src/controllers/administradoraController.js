@@ -3,7 +3,14 @@ import Administradora from '../models/Administradora.js';
 // Listar todas as administradoras
 export const listarAdministradoras = async (req, res) => {
   try {
-    const administradoras = await Administradora.list();
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const administradoras = await Administradora.list(companyId);
     res.json({ administradoras });
   } catch (error) {
     console.error('Erro ao listar administradoras:', error);
@@ -15,7 +22,14 @@ export const listarAdministradoras = async (req, res) => {
 export const buscarAdministradora = async (req, res) => {
   try {
     const { id } = req.params;
-    const administradora = await Administradora.findById(id);
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const administradora = await Administradora.findById(id, companyId);
 
     if (!administradora) {
       return res.status(404).json({ error: 'Administradora não encontrada' });
@@ -31,6 +45,13 @@ export const buscarAdministradora = async (req, res) => {
 // Criar nova administradora
 export const criarAdministradora = async (req, res) => {
   try {
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
     const {
       nome,
       nome_contato,
@@ -59,7 +80,7 @@ export const criarAdministradora = async (req, res) => {
       celular,
       comissionamento_recebido,
       comissionamento_pago
-    });
+    }, companyId);
 
     res.status(201).json({ administradora: novaAdministradora });
   } catch (error) {
@@ -72,6 +93,13 @@ export const criarAdministradora = async (req, res) => {
 export const atualizarAdministradora = async (req, res) => {
   try {
     const { id } = req.params;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
     const {
       nome,
       nome_contato,
@@ -86,7 +114,7 @@ export const atualizarAdministradora = async (req, res) => {
     }
 
     // Verificar se administradora existe
-    const administradoraExistente = await Administradora.findById(id);
+    const administradoraExistente = await Administradora.findById(id, companyId);
     if (!administradoraExistente) {
       return res.status(404).json({ error: 'Administradora não encontrada' });
     }
@@ -106,7 +134,7 @@ export const atualizarAdministradora = async (req, res) => {
       celular,
       comissionamento_recebido,
       comissionamento_pago
-    });
+    }, companyId);
 
     res.json({ administradora: administradoraAtualizada });
   } catch (error) {
@@ -119,14 +147,20 @@ export const atualizarAdministradora = async (req, res) => {
 export const deletarAdministradora = async (req, res) => {
   try {
     const { id } = req.params;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     // Verificar se administradora existe
-    const administradora = await Administradora.findById(id);
+    const administradora = await Administradora.findById(id, companyId);
     if (!administradora) {
       return res.status(404).json({ error: 'Administradora não encontrada' });
     }
 
-    await Administradora.delete(id);
+    await Administradora.delete(id, companyId);
     res.json({ message: 'Administradora deletada com sucesso' });
   } catch (error) {
     console.error('Erro ao deletar administradora:', error);

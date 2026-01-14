@@ -13,10 +13,8 @@ const DashboardMinimal = () => {
   const loadData = async () => {
     try {
       const res = await dashboardAPI.estatisticas();
-      console.log('DATA:', res.data);
       setData(res.data);
     } catch (err) {
-      console.error('ERROR:', err);
       setError(err.message);
     } finally {
       setLoading(false);

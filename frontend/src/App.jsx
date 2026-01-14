@@ -22,6 +22,7 @@ import Vendedores from './pages/configuracoes/Vendedores';
 import Equipes from './pages/configuracoes/Equipes';
 import Administradoras from './pages/configuracoes/Administradoras';
 import Metas from './pages/configuracoes/Metas';
+import SuperAdminPanel from './pages/SuperAdminPanel';
 
 // Componente para rotas protegidas
 const ProtectedRoute = ({ children }) => {
@@ -218,6 +219,15 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Billing />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/super-admin"
+          element={
+            <ProtectedRoute>
+              <SuperAdminPanel />
             </ProtectedRoute>
           }
         />

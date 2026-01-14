@@ -9,11 +9,13 @@ import {
   estatisticas
 } from '../controllers/comissaoController.js';
 import { authenticateToken, isAdmin } from '../middleware/auth.js';
+import { tenantMiddleware } from '../middleware/tenantMiddleware.js';
 
 const router = express.Router();
 
-// Todas as rotas de comissões requerem autenticação
+// Todas as rotas de comissões requerem autenticação e isolamento multi-tenant
 router.use(authenticateToken);
+router.use(tenantMiddleware);
 
 // Rotas acessíveis por todos os usuários autenticados
 router.get('/', listarComissoes);

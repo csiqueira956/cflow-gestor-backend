@@ -2,7 +2,12 @@ import pool from '../config/database.js';
 
 class Administradora {
   // Criar nova administradora
-  static async create(administradoraData) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async create(administradoraData, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para criar administradora');
+    }
+
     const {
       nome,
       nome_contato,
@@ -17,9 +22,10 @@ class Administradora {
         nome_contato,
         celular,
         comissionamento_recebido,
-        comissionamento_pago
+        comissionamento_pago,
+        company_id
       )
-      VALUES ($1, $2, $3, $4, $5)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
 
@@ -28,7 +34,8 @@ class Administradora {
       nome_contato,
       celular,
       comissionamento_recebido,
-      comissionamento_pago
+      comissionamento_pago,
+      companyId
     ];
 
     const result = await pool.query(query, values);
@@ -36,29 +43,45 @@ class Administradora {
   }
 
   // Listar todas as administradoras
-  static async list() {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async list(companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para listar administradoras');
+    }
+
     const query = `
       SELECT * FROM administradoras
+      WHERE company_id = $1
       ORDER BY nome ASC
     `;
 
-    const result = await pool.query(query);
+    const result = await pool.query(query, [companyId]);
     return result.rows;
   }
 
   // Buscar administradora por ID
-  static async findById(id) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async findById(id, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para buscar administradora');
+    }
+
     const query = `
       SELECT * FROM administradoras
-      WHERE id = $1
+      WHERE id = $1 AND company_id = $2
     `;
 
-    const result = await pool.query(query, [id]);
+    const result = await pool.query(query, [id, companyId]);
     return result.rows[0];
   }
 
   // Atualizar administradora
-  static async update(id, administradoraData) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async update(id, administradoraData, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para atualizar administradora');
+    }
+
     const {
       nome,
       nome_contato,
@@ -75,7 +98,7 @@ class Administradora {
           comissionamento_recebido = $4,
           comissionamento_pago = $5,
           updated_at = CURRENT_TIMESTAMP
-      WHERE id = $6
+      WHERE id = $6 AND company_id = $7
       RETURNING *
     `;
 
@@ -85,7 +108,8 @@ class Administradora {
       celular,
       comissionamento_recebido,
       comissionamento_pago,
-      id
+      id,
+      companyId
     ];
 
     const result = await pool.query(query, values);
@@ -93,14 +117,19 @@ class Administradora {
   }
 
   // Deletar administradora
-  static async delete(id) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async delete(id, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para deletar administradora');
+    }
+
     const query = `
       DELETE FROM administradoras
-      WHERE id = $1
+      WHERE id = $1 AND company_id = $2
       RETURNING id
     `;
 
-    const result = await pool.query(query, [id]);
+    const result = await pool.query(query, [id, companyId]);
     return result.rows[0];
   }
 }

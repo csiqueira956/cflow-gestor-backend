@@ -9,13 +9,13 @@ import {
   getHistory,
   getSummary
 } from '../controllers/subscriptionController.js';
-import { verifyToken } from '../controllers/authController.js';
+import { authenticateToken } from '../middleware/auth.js';
 import { tenantMiddleware } from '../middleware/tenantMiddleware.js';
 
 const router = express.Router();
 
 // Todas as rotas requerem autenticação e tenant
-router.use(verifyToken);
+router.use(authenticateToken);
 router.use(tenantMiddleware);
 
 // Rotas de assinatura

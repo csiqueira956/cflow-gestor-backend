@@ -100,7 +100,6 @@ router.post('/notifications/run-checks', authenticateToken, isSuperAdmin, async 
       resultado
     });
   } catch (error) {
-    console.error('Erro ao executar verificações:', error);
     res.status(500).json({
       error: 'Erro ao executar verificações automáticas',
       message: error.message

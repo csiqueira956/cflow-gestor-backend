@@ -15,6 +15,7 @@ import planRoutes from './routes/planRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import billingRoutes from './routes/billingRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
+import adminAssinaturaRoutes from './routes/adminAssinaturaRoutes.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 
 // Configuração de variáveis de ambiente
@@ -53,6 +54,9 @@ app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/webhooks', webhookRoutes); // Webhooks do gateway (sem auth)
 
+// Rotas de Super Admin (gerenciamento de empresas/assinaturas)
+app.use('/api/admin', adminAssinaturaRoutes);
+
 // Rota de teste
 app.get('/', (req, res) => {
   res.json({
@@ -71,7 +75,8 @@ app.get('/', (req, res) => {
       plans: '/api/plans',
       subscription: '/api/subscription',
       billing: '/api/billing',
-      webhooks: '/api/webhooks'
+      webhooks: '/api/webhooks',
+      admin: '/api/admin (super_admin only)'
     }
   });
 });

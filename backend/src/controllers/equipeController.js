@@ -3,8 +3,14 @@ import Equipe from '../models/Equipe.js';
 // Listar todas as equipes
 export const listarEquipes = async (req, res) => {
   try {
-    const equipes = await Equipe.list();
-    console.log('📋 Listando equipes:', JSON.stringify(equipes, null, 2));
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const equipes = await Equipe.list(companyId);
     res.json({ equipes });
   } catch (error) {
     console.error('Erro ao listar equipes:', error);
@@ -16,7 +22,14 @@ export const listarEquipes = async (req, res) => {
 export const buscarEquipe = async (req, res) => {
   try {
     const { id } = req.params;
-    const equipe = await Equipe.findById(id);
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const equipe = await Equipe.findById(id, companyId);
 
     if (!equipe) {
       return res.status(404).json({ error: 'Equipe não encontrada' });
@@ -33,19 +46,25 @@ export const buscarEquipe = async (req, res) => {
 export const criarEquipe = async (req, res) => {
   try {
     const { nome, descricao } = req.body;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     // Validações
     if (!nome) {
       return res.status(400).json({ error: 'Nome é obrigatório' });
     }
 
-    // Verificar se já existe equipe com mesmo nome
-    const equipeExistente = await Equipe.findByNome(nome);
+    // Verificar se já existe equipe com mesmo nome na empresa
+    const equipeExistente = await Equipe.findByNome(nome, companyId);
     if (equipeExistente) {
       return res.status(400).json({ error: 'Já existe uma equipe com este nome' });
     }
 
-    const novaEquipe = await Equipe.create({ nome, descricao });
+    const novaEquipe = await Equipe.create({ nome, descricao }, companyId);
     res.status(201).json({ equipe: novaEquipe });
   } catch (error) {
     console.error('Erro ao criar equipe:', error);
@@ -58,6 +77,12 @@ export const atualizarEquipe = async (req, res) => {
   try {
     const { id } = req.params;
     const { nome, descricao } = req.body;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     // Validações
     if (!nome) {
@@ -65,18 +90,18 @@ export const atualizarEquipe = async (req, res) => {
     }
 
     // Verificar se equipe existe
-    const equipeExistente = await Equipe.findById(id);
+    const equipeExistente = await Equipe.findById(id, companyId);
     if (!equipeExistente) {
       return res.status(404).json({ error: 'Equipe não encontrada' });
     }
 
-    // Verificar se o novo nome já existe em outra equipe
-    const equipeMesmoNome = await Equipe.findByNome(nome);
+    // Verificar se o novo nome já existe em outra equipe da mesma empresa
+    const equipeMesmoNome = await Equipe.findByNome(nome, companyId);
     if (equipeMesmoNome && equipeMesmoNome.id !== parseInt(id)) {
       return res.status(400).json({ error: 'Já existe uma equipe com este nome' });
     }
 
-    const equipeAtualizada = await Equipe.update(id, { nome, descricao });
+    const equipeAtualizada = await Equipe.update(id, { nome, descricao }, companyId);
     res.json({ equipe: equipeAtualizada });
   } catch (error) {
     console.error('Erro ao atualizar equipe:', error);
@@ -88,14 +113,20 @@ export const atualizarEquipe = async (req, res) => {
 export const deletarEquipe = async (req, res) => {
   try {
     const { id } = req.params;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     // Verificar se equipe existe
-    const equipe = await Equipe.findById(id);
+    const equipe = await Equipe.findById(id, companyId);
     if (!equipe) {
       return res.status(404).json({ error: 'Equipe não encontrada' });
     }
 
-    await Equipe.delete(id);
+    await Equipe.delete(id, companyId);
     res.json({ message: 'Equipe deletada com sucesso' });
   } catch (error) {
     console.error('Erro ao deletar equipe:', error);

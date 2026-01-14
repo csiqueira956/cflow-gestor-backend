@@ -75,9 +75,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Verificar se é admin
+  // Verificar se é admin (ou super_admin, que tem todas as permissões de admin)
   const isAdmin = () => {
-    return usuario?.role === 'admin';
+    return usuario?.role === 'admin' || usuario?.role === 'super_admin';
   };
 
   // Verificar se é gerente
@@ -93,6 +93,16 @@ export const AuthProvider = ({ children }) => {
   // Verificar se é admin ou gerente (tem permissões de gestão)
   const isAdminOrGerente = () => {
     return usuario?.role === 'admin' || usuario?.role === 'gerente';
+  };
+
+  // Verificar se é super admin (acesso cross-tenant)
+  const isSuperAdmin = () => {
+    return usuario?.role === 'super_admin';
+  };
+
+  // Verificar se é admin ou super admin
+  const isAdminOrSuperAdmin = () => {
+    return usuario?.role === 'admin' || usuario?.role === 'super_admin';
   };
 
   // Atualizar dados do usuário
@@ -112,6 +122,8 @@ export const AuthProvider = ({ children }) => {
     isGerente,
     isVendedor,
     isAdminOrGerente,
+    isSuperAdmin,
+    isAdminOrSuperAdmin,
     updateUsuario,
   };
 

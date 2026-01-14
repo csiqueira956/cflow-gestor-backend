@@ -3,21 +3,26 @@ import pool from '../config/database.js';
 
 class Usuario {
   // Criar novo usuário
-  static async create({ nome, email, senha_hash, role = 'vendedor', tipo_usuario, percentual_comissao, celular, equipe_id }) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async create({ nome, email, senha_hash, role = 'vendedor', tipo_usuario, percentual_comissao, celular, equipe_id }, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para criar usuário');
+    }
+
     // Gerar link público único se for vendedor
     const link_publico = role === 'vendedor' ? crypto.randomBytes(16).toString('hex') : null;
 
     const query = `
-      INSERT INTO usuarios (nome, email, senha_hash, role, tipo_usuario, percentual_comissao, celular, equipe_id, link_publico)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id, nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, link_publico, created_at
+      INSERT INTO usuarios (nome, email, senha_hash, role, tipo_usuario, percentual_comissao, celular, equipe_id, link_publico, company_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, link_publico, company_id, created_at
     `;
-    const values = [nome, email, senha_hash, role, tipo_usuario, percentual_comissao, celular, equipe_id, link_publico];
+    const values = [nome, email, senha_hash, role, tipo_usuario, percentual_comissao, celular, equipe_id, link_publico, companyId];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
 
-  // Buscar usuário por email
+  // Buscar usuário por email (usado no login - sem filtro de company)
   static async findByEmail(email) {
     const query = 'SELECT * FROM usuarios WHERE email = $1';
     const result = await pool.query(query, [email]);
@@ -25,24 +30,32 @@ class Usuario {
   }
 
   // Buscar usuário por ID
-  static async findById(id) {
-    const query = `
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async findById(id, companyId = null) {
+    let query = `
       SELECT u.id, u.nome, u.email, u.role, u.link_publico, u.tipo_usuario,
-             u.percentual_comissao, u.celular, u.equipe_id, u.foto_perfil, u.created_at,
+             u.percentual_comissao, u.celular, u.equipe_id, u.foto_perfil, u.company_id, u.created_at,
              e.nome as equipe_nome
       FROM usuarios u
       LEFT JOIN equipes e ON u.equipe_id = e.id
       WHERE u.id = $1
     `;
-    const result = await pool.query(query, [id]);
+    const params = [id];
+
+    if (companyId) {
+      query += ' AND u.company_id = $2';
+      params.push(companyId);
+    }
+
+    const result = await pool.query(query, params);
     return result.rows[0];
   }
 
-  // Buscar usuário por link público
+  // Buscar usuário por link público (usado para cadastro público - sem filtro de company)
   static async findByLinkPublico(link_publico) {
     const query = `
       SELECT u.id, u.nome, u.email, u.role, u.link_publico, u.tipo_usuario,
-             u.percentual_comissao, u.celular, u.equipe_id, u.created_at,
+             u.percentual_comissao, u.celular, u.equipe_id, u.company_id, u.created_at,
              e.nome as equipe_nome
       FROM usuarios u
       LEFT JOIN equipes e ON u.equipe_id = e.id
@@ -53,61 +66,90 @@ class Usuario {
   }
 
   // Listar todos os vendedores
-  static async listVendedores() {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async listVendedores(companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para listar vendedores');
+    }
+
     const query = `
       SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao, u.celular, u.equipe, u.equipe_id,
              e.nome as equipe_nome, u.created_at
       FROM usuarios u
       LEFT JOIN equipes e ON u.equipe_id = e.id
-      WHERE u.role = 'vendedor'
+      WHERE u.role = 'vendedor' AND u.company_id = $1
       ORDER BY u.nome
     `;
-    const result = await pool.query(query);
+    const result = await pool.query(query, [companyId]);
     return result.rows;
   }
 
   // Listar todos os gerentes
-  static async listGerentes() {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async listGerentes(companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para listar gerentes');
+    }
+
     const query = `
       SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao, u.celular, u.equipe, u.equipe_id,
              e.nome as equipe_nome, u.created_at
       FROM usuarios u
       LEFT JOIN equipes e ON u.equipe_id = e.id
-      WHERE u.role = 'gerente'
+      WHERE u.role = 'gerente' AND u.company_id = $1
       ORDER BY u.nome
     `;
-    const result = await pool.query(query);
+    const result = await pool.query(query, [companyId]);
     return result.rows;
   }
 
   // Listar vendedores e gerentes (não-admins)
-  static async listUsuarios() {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async listUsuarios(companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para listar usuários');
+    }
+
     const query = `
       SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao, u.celular, u.equipe, u.equipe_id,
              e.nome as equipe_nome, u.created_at
       FROM usuarios u
       LEFT JOIN equipes e ON u.equipe_id = e.id
-      WHERE u.role IN ('vendedor', 'gerente')
+      WHERE u.role IN ('vendedor', 'gerente') AND u.company_id = $1
       ORDER BY u.role DESC, u.nome
     `;
-    const result = await pool.query(query);
+    const result = await pool.query(query, [companyId]);
     return result.rows;
   }
 
   // Buscar vendedores por equipe_id
-  static async findVendedoresByEquipeId(equipe_id) {
-    const query = `
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async findVendedoresByEquipeId(equipe_id, companyId = null) {
+    let query = `
       SELECT id, nome, email, role, tipo_usuario, percentual_comissao, celular, equipe, equipe_id, created_at
       FROM usuarios
       WHERE equipe_id = $1 AND role = 'vendedor'
-      ORDER BY nome
     `;
-    const result = await pool.query(query, [equipe_id]);
+    const params = [equipe_id];
+
+    if (companyId) {
+      query += ' AND company_id = $2';
+      params.push(companyId);
+    }
+
+    query += ' ORDER BY nome';
+
+    const result = await pool.query(query, params);
     return result.rows;
   }
 
   // Atualizar usuário
-  static async update(id, { nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, senha_hash }) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async update(id, { nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, senha_hash }, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para atualizar usuário');
+    }
+
     console.log('🔧 Usuario.update - Dados recebidos:', { id, nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, temSenha: !!senha_hash });
 
     // Preparar query dinamicamente baseado nos campos fornecidos
@@ -150,11 +192,12 @@ class Usuario {
     }
 
     values.push(id);
+    values.push(companyId);
 
     const query = `
       UPDATE usuarios
       SET ${updates.join(', ')}
-      WHERE id = $${paramCount}
+      WHERE id = $${paramCount} AND company_id = $${paramCount + 1}
       RETURNING id, nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, created_at
     `;
 
@@ -192,9 +235,14 @@ class Usuario {
   }
 
   // Deletar usuário
-  static async delete(id) {
-    const query = 'DELETE FROM usuarios WHERE id = $1 RETURNING id';
-    const result = await pool.query(query, [id]);
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async delete(id, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para deletar usuário');
+    }
+
+    const query = 'DELETE FROM usuarios WHERE id = $1 AND company_id = $2 RETURNING id';
+    const result = await pool.query(query, [id, companyId]);
     return result.rows[0];
   }
 }

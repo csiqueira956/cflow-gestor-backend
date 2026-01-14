@@ -19,9 +19,20 @@ export const tenantMiddleware = (req, res, next) => {
       });
     }
 
-    // Verificar se o usuário tem company_id
+    // Super admin pode não ter company_id e acessa tudo
+    if (req.user.role === 'super_admin') {
+      req.isSuperAdmin = true;
+      req.companyId = req.user.company_id || null;
+      req.tenant = {
+        companyId: req.user.company_id || null,
+        userId: req.user.id,
+        userRole: req.user.role
+      };
+      return next();
+    }
+
+    // Verificar se o usuário tem company_id (obrigatório para não-super_admin)
     if (!req.user.company_id) {
-      console.error('❌ Usuário sem company_id:', req.user);
       return res.status(403).json({
         error: 'Empresa não identificada',
         message: 'Usuário não está vinculado a nenhuma empresa'
@@ -36,16 +47,8 @@ export const tenantMiddleware = (req, res, next) => {
       userRole: req.user.role
     };
 
-    console.log('🏢 Tenant identificado:', {
-      companyId: req.companyId,
-      userId: req.user.id,
-      role: req.user.role,
-      path: req.path
-    });
-
     next();
   } catch (error) {
-    console.error('❌ Erro no tenantMiddleware:', error);
     return res.status(500).json({
       error: 'Erro ao processar tenant',
       message: error.message
@@ -71,13 +74,6 @@ export const validateTenantAccess = (resourceCompanyId) => {
     const resCompanyId = String(resourceCompanyId);
 
     if (reqCompanyId !== resCompanyId) {
-      console.warn('🚨 Tentativa de acesso cross-tenant bloqueada:', {
-        userId: req.user.id,
-        userCompanyId: reqCompanyId,
-        resourceCompanyId: resCompanyId,
-        path: req.path
-      });
-
       return res.status(403).json({
         error: 'Acesso negado',
         message: 'Você não tem permissão para acessar este recurso'
@@ -177,13 +173,6 @@ export const checkPlanLimits = (limitType) => {
       }
 
       if (limitExceeded) {
-        console.warn('⚠️ Limite do plano atingido:', {
-          companyId,
-          limitType,
-          current: company[`current_${limitType}_count`],
-          max: company[`max_${limitType}`]
-        });
-
         return res.status(403).json({
           error: 'Limite do plano atingido',
           message: limitMessage,
@@ -204,8 +193,7 @@ export const checkPlanLimits = (limitType) => {
       };
 
       next();
-    } catch (error) {
-      console.error('❌ Erro ao verificar limites do plano:', error);
+    } catch {
       next(); // Continuar em caso de erro (não bloquear operação)
     }
   };
@@ -215,9 +203,8 @@ export const checkPlanLimits = (limitType) => {
  * Middleware opcional para super admins
  * Permite acesso cross-tenant para super admins
  */
-export const allowSuperAdmin = (req, res, next) => {
+export const allowSuperAdmin = (req, _res, next) => {
   if (req.user && req.user.role === 'super_admin') {
-    console.log('🔓 Super admin detectado - permitindo acesso cross-tenant');
     req.isSuperAdmin = true;
   }
   next();

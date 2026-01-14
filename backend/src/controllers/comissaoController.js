@@ -4,10 +4,12 @@ import Cliente from '../models/Cliente.js';
 // Listar comissões
 export const listarComissoes = async (req, res) => {
   try {
-    console.log('📋 Requisição para listar comissões recebida');
-    console.log('👤 Usuário:', req.user);
+    const { role, id: userId, company_id } = req.user;
+    const companyId = req.companyId || company_id;
 
-    const { role, id: userId } = req.user;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     const filters = {};
 
@@ -25,12 +27,7 @@ export const listarComissoes = async (req, res) => {
       filters.status = req.query.status;
     }
 
-    console.log('🔍 Filtros aplicados:', filters);
-    console.log('📞 Chamando Comissao.list()...');
-
-    const comissoes = await Comissao.list(filters);
-
-    console.log('✅ Comissões retornadas:', comissoes.length);
+    const comissoes = await Comissao.list(companyId, filters);
 
     res.json({
       comissoes,
@@ -46,7 +43,14 @@ export const listarComissoes = async (req, res) => {
 export const buscarComissao = async (req, res) => {
   try {
     const { id } = req.params;
-    const comissao = await Comissao.findById(id);
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const comissao = await Comissao.findById(id, companyId);
 
     if (!comissao) {
       return res.status(404).json({ error: 'Comissão não encontrada' });
@@ -67,6 +71,13 @@ export const buscarComissao = async (req, res) => {
 // Criar comissão (apenas admin)
 export const criarComissao = async (req, res) => {
   try {
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
     const {
       cliente_id,
       vendedor_id,
@@ -92,7 +103,7 @@ export const criarComissao = async (req, res) => {
       valor_comissao,
       numero_parcelas: numero_parcelas || 1,
       status: 'pendente'
-    });
+    }, companyId);
 
     // Criar as parcelas automaticamente
     if (numero_parcelas && numero_parcelas >= 1) {
@@ -123,7 +134,7 @@ export const criarComissao = async (req, res) => {
 
     // Mover o cliente automaticamente para a etapa "em_comissionamento"
     try {
-      await Cliente.updateEtapa(cliente_id, 'em_comissionamento');
+      await Cliente.updateEtapa(cliente_id, 'em_comissionamento', companyId);
     } catch (error) {
       console.error('Erro ao atualizar etapa do cliente:', error);
       // Não bloquear a criação da comissão se falhar ao atualizar a etapa
@@ -144,6 +155,12 @@ export const atualizarComissao = async (req, res) => {
   try {
     const { id } = req.params;
     const { numero_parcelas, status } = req.body;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     if (!numero_parcelas && !status) {
       return res.status(400).json({
@@ -152,7 +169,7 @@ export const atualizarComissao = async (req, res) => {
     }
 
     // Buscar comissão atual
-    const comissaoAtual = await Comissao.findById(id);
+    const comissaoAtual = await Comissao.findById(id, companyId);
     if (!comissaoAtual) {
       return res.status(404).json({ error: 'Comissão não encontrada' });
     }
@@ -160,7 +177,7 @@ export const atualizarComissao = async (req, res) => {
     const comissaoAtualizada = await Comissao.update(id, {
       numero_parcelas: numero_parcelas || comissaoAtual.numero_parcelas,
       status: status || comissaoAtual.status
-    });
+    }, companyId);
 
     // Se o número de parcelas mudou, recriar as parcelas
     if (numero_parcelas && numero_parcelas !== comissaoAtual.numero_parcelas) {
@@ -193,7 +210,7 @@ export const atualizarComissao = async (req, res) => {
     }
 
     // Buscar comissão atualizada com parcelas
-    const comissaoFinal = await Comissao.findById(id);
+    const comissaoFinal = await Comissao.findById(id, companyId);
 
     res.json({
       message: 'Comissão atualizada com sucesso',
@@ -209,12 +226,20 @@ export const atualizarComissao = async (req, res) => {
 export const deletarComissao = async (req, res) => {
   try {
     const { id } = req.params;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
 
-    const comissaoDeletada = await Comissao.delete(id);
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
-    if (!comissaoDeletada) {
+    // Verificar se comissão existe
+    const comissao = await Comissao.findById(id, companyId);
+    if (!comissao) {
       return res.status(404).json({ error: 'Comissão não encontrada' });
     }
+
+    await Comissao.delete(id, companyId);
 
     res.json({ message: 'Comissão deletada com sucesso' });
   } catch (error) {
@@ -260,7 +285,14 @@ export const atualizarParcela = async (req, res) => {
 // Estatísticas de comissões
 export const estatisticas = async (req, res) => {
   try {
-    const stats = await Comissao.estatisticasPorVendedor();
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const stats = await Comissao.estatisticasPorVendedor(companyId);
     res.json(stats);
   } catch (error) {
     console.error('Erro ao buscar estatísticas:', error);

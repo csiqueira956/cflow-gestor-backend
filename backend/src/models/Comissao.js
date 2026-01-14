@@ -1,31 +1,13 @@
-import sqlite3 from 'sqlite3';
-import { promisify } from 'util';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Criar conexão SQLite direto para este model
-const dbPath = path.join(__dirname, '../../database/gestor-consorcios.db');
-const db = new sqlite3.Database(dbPath);
-
-// Promisificar métodos do SQLite
-// db.run precisa de uma implementação customizada para retornar lastID
-const dbRun = (query, params) => {
-  return new Promise((resolve, reject) => {
-    db.run(query, params, function(err) {
-      if (err) reject(err);
-      else resolve({ lastID: this.lastID, changes: this.changes });
-    });
-  });
-};
-const dbGet = promisify(db.get.bind(db));
-const dbAll = promisify(db.all.bind(db));
+import pool from '../config/database.js';
 
 class Comissao {
   // Criar nova comissão
-  static async create(comissaoData) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async create(comissaoData, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para criar comissão');
+    }
+
     const {
       cliente_id,
       vendedor_id,
@@ -39,9 +21,10 @@ class Comissao {
     const query = `
       INSERT INTO comissoes (
         cliente_id, vendedor_id, valor_venda, percentual_comissao,
-        valor_comissao, numero_parcelas, status
+        valor_comissao, numero_parcelas, status, company_id
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
     `;
 
     const values = [
@@ -51,17 +34,21 @@ class Comissao {
       percentual_comissao,
       valor_comissao,
       numero_parcelas,
-      status
+      status,
+      companyId
     ];
 
-    const result = await dbRun(query, values);
-
-    // Buscar a comissão recém-criada
-    return await this.findById(result.lastID);
+    const result = await pool.query(query, values);
+    return result.rows[0];
   }
 
   // Listar comissões (com filtros opcionais)
-  static async list(filters = {}) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async list(companyId, filters = {}) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para listar comissões');
+    }
+
     console.log('🔧 Comissao.list() INICIADO com filtros:', filters);
 
     try {
@@ -73,19 +60,22 @@ class Comissao {
         FROM comissoes c
         LEFT JOIN clientes cl ON c.cliente_id = cl.id
         LEFT JOIN usuarios u ON c.vendedor_id = u.id
-        WHERE 1=1
+        WHERE c.company_id = $1
       `;
 
-      const values = [];
+      const values = [companyId];
+      let paramCount = 2;
 
       if (filters.vendedor_id) {
-        query += ` AND c.vendedor_id = ?`;
+        query += ` AND c.vendedor_id = $${paramCount}`;
         values.push(filters.vendedor_id);
+        paramCount++;
       }
 
       if (filters.status) {
-        query += ` AND c.status = ?`;
+        query += ` AND c.status = $${paramCount}`;
         values.push(filters.status);
+        paramCount++;
       }
 
       query += ' ORDER BY c.created_at DESC';
@@ -93,17 +83,18 @@ class Comissao {
       console.log('🔧 Executando query:', query);
       console.log('🔧 Com valores:', values);
 
-      const comissoes = await dbAll(query, values);
+      const result = await pool.query(query, values);
+      const comissoes = result.rows;
 
       console.log('🔧 Query executada com sucesso. Resultados:', comissoes ? comissoes.length : 0);
 
       // Buscar parcelas para cada comissão
       for (const comissao of comissoes) {
-        const parcelas = await dbAll(
-          'SELECT * FROM parcelas_comissao WHERE comissao_id = ? ORDER BY numero_parcela ASC',
+        const parcelasResult = await pool.query(
+          'SELECT * FROM parcelas_comissao WHERE comissao_id = $1 ORDER BY numero_parcela ASC',
           [comissao.id]
         );
-        comissao.parcelas = parcelas;
+        comissao.parcelas = parcelasResult.rows;
       }
 
       console.log('🔧 Parcelas adicionadas às comissões');
@@ -116,7 +107,12 @@ class Comissao {
   }
 
   // Buscar comissão por ID com suas parcelas
-  static async findById(id) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async findById(id, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para buscar comissão');
+    }
+
     const comissaoQuery = `
       SELECT
         c.*,
@@ -128,31 +124,38 @@ class Comissao {
       FROM comissoes c
       LEFT JOIN clientes cl ON c.cliente_id = cl.id
       LEFT JOIN usuarios u ON c.vendedor_id = u.id
-      WHERE c.id = ?
+      WHERE c.id = $1 AND c.company_id = $2
     `;
 
     const parcelasQuery = `
       SELECT * FROM parcelas_comissao
-      WHERE comissao_id = ?
+      WHERE comissao_id = $1
       ORDER BY numero_parcela ASC
     `;
 
-    const [comissao, parcelas] = await Promise.all([
-      dbGet(comissaoQuery, [id]),
-      dbAll(parcelasQuery, [id])
+    const [comissaoResult, parcelasResult] = await Promise.all([
+      pool.query(comissaoQuery, [id, companyId]),
+      pool.query(parcelasQuery, [id])
     ]);
+
+    const comissao = comissaoResult.rows[0];
 
     if (!comissao) {
       return null;
     }
 
-    comissao.parcelas = parcelas;
+    comissao.parcelas = parcelasResult.rows;
 
     return comissao;
   }
 
   // Atualizar comissão
-  static async update(id, comissaoData) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async update(id, comissaoData, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para atualizar comissão');
+    }
+
     const {
       numero_parcelas,
       status
@@ -160,23 +163,34 @@ class Comissao {
 
     const query = `
       UPDATE comissoes
-      SET numero_parcelas = ?, status = ?
-      WHERE id = ?
+      SET numero_parcelas = $1, status = $2, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3 AND company_id = $4
+      RETURNING *
     `;
 
-    const values = [numero_parcelas, status, id];
+    const values = [numero_parcelas, status, id, companyId];
 
-    await dbRun(query, values);
-
-    // Buscar comissão atualizada
-    return await this.findById(id);
+    const result = await pool.query(query, values);
+    return result.rows[0];
   }
 
   // Deletar comissão
-  static async delete(id) {
-    const query = 'DELETE FROM comissoes WHERE id = ?';
-    await dbRun(query, [id]);
-    return { id };
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async delete(id, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para deletar comissão');
+    }
+
+    // Primeiro deletar as parcelas associadas
+    await pool.query('DELETE FROM parcelas_comissao WHERE comissao_id = $1', [id]);
+
+    const query = `
+      DELETE FROM comissoes
+      WHERE id = $1 AND company_id = $2
+      RETURNING id
+    `;
+    const result = await pool.query(query, [id, companyId]);
+    return result.rows[0];
   }
 
   // Criar parcela de comissão
@@ -196,7 +210,8 @@ class Comissao {
         comissao_id, numero_parcela, valor_parcela,
         data_vencimento, data_pagamento, status, observacao
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
     `;
 
     const values = [
@@ -209,10 +224,8 @@ class Comissao {
       observacao
     ];
 
-    const result = await dbRun(query, values);
-
-    // Buscar parcela recém-criada
-    return await dbGet('SELECT * FROM parcelas_comissao WHERE id = ?', [result.lastID]);
+    const result = await pool.query(query, values);
+    return result.rows[0];
   }
 
   // Atualizar parcela
@@ -227,9 +240,10 @@ class Comissao {
 
     const query = `
       UPDATE parcelas_comissao
-      SET valor_parcela = ?, data_vencimento = ?, data_pagamento = ?,
-          status = ?, observacao = ?
-      WHERE id = ?
+      SET valor_parcela = $1, data_vencimento = $2, data_pagamento = $3,
+          status = $4, observacao = $5, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $6
+      RETURNING *
     `;
 
     const values = [
@@ -241,33 +255,36 @@ class Comissao {
       id
     ];
 
-    await dbRun(query, values);
-
-    // Buscar parcela atualizada
-    return await dbGet('SELECT * FROM parcelas_comissao WHERE id = ?', [id]);
+    const result = await pool.query(query, values);
+    return result.rows[0];
   }
 
   // Deletar parcela
   static async deleteParcela(id) {
-    const query = 'DELETE FROM parcelas_comissao WHERE id = ?';
-    await dbRun(query, [id]);
-    return { id };
+    const query = 'DELETE FROM parcelas_comissao WHERE id = $1 RETURNING id';
+    const result = await pool.query(query, [id]);
+    return result.rows[0];
   }
 
   // Buscar parcelas por comissão
   static async findParcelasByComissaoId(comissaoId) {
     const query = `
       SELECT * FROM parcelas_comissao
-      WHERE comissao_id = ?
+      WHERE comissao_id = $1
       ORDER BY numero_parcela ASC
     `;
 
-    const result = await dbAll(query, [comissaoId]);
-    return result;
+    const result = await pool.query(query, [comissaoId]);
+    return result.rows;
   }
 
   // Estatísticas de comissões por vendedor
-  static async estatisticasPorVendedor() {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async estatisticasPorVendedor(companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para buscar estatísticas');
+    }
+
     const query = `
       SELECT
         u.id as vendedor_id,
@@ -277,14 +294,14 @@ class Comissao {
         COALESCE(SUM(CASE WHEN c.status = 'pago' THEN c.valor_comissao ELSE 0 END), 0) as total_pago,
         COALESCE(SUM(CASE WHEN c.status = 'pendente' OR c.status = 'em_pagamento' THEN c.valor_comissao ELSE 0 END), 0) as total_pendente
       FROM usuarios u
-      LEFT JOIN comissoes c ON u.id = c.vendedor_id
-      WHERE u.role = 'vendedor'
+      LEFT JOIN comissoes c ON u.id = c.vendedor_id AND c.company_id = $1
+      WHERE u.role = 'vendedor' AND u.company_id = $1
       GROUP BY u.id, u.nome
       ORDER BY total_valor DESC
     `;
 
-    const result = await dbAll(query);
-    return result;
+    const result = await pool.query(query, [companyId]);
+    return result.rows;
   }
 }
 

@@ -159,13 +159,6 @@ const CadastroClienteCompleto = () => {
 
     const finalValue = type === 'checkbox' ? checked : valorFormatado;
 
-    console.log(`📝 Campo alterado: ${name}`, {
-      valorDigitado: value,
-      valorFormatado: valorFormatado,
-      valorFinal: finalValue,
-      comprimento: finalValue?.length || 0
-    });
-
     setFormData({
       ...formData,
       [name]: finalValue,
@@ -180,8 +173,6 @@ const CadastroClienteCompleto = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('📝 Formulário submetido');
-    console.log('📋 Estado completo do formData:', formData);
     setErro('');
     setSucesso('');
     setLoading(true);
@@ -191,27 +182,6 @@ const CadastroClienteCompleto = () => {
     const cpfValido = formData.cpf && formData.cpf.replace(/\D/g, '').length > 0;
     const telefoneValido = formData.telefone_celular && formData.telefone_celular.replace(/\D/g, '').length > 0;
 
-    console.log('🔍 Validando campos:', {
-      nome: {
-        valor: formData.nome,
-        comprimento: formData.nome?.length || 0,
-        trimmed: formData.nome?.trim(),
-        valido: nomeValido
-      },
-      cpf: {
-        valor: formData.cpf,
-        comprimento: formData.cpf?.length || 0,
-        somenteNumeros: formData.cpf?.replace(/\D/g, ''),
-        valido: cpfValido
-      },
-      telefone_celular: {
-        valor: formData.telefone_celular,
-        comprimento: formData.telefone_celular?.length || 0,
-        somenteNumeros: formData.telefone_celular?.replace(/\D/g, ''),
-        valido: telefoneValido
-      }
-    });
-
     if (!nomeValido || !cpfValido || !telefoneValido) {
       const camposFaltando = [];
       if (!nomeValido) camposFaltando.push('Nome');
@@ -219,8 +189,6 @@ const CadastroClienteCompleto = () => {
       if (!telefoneValido) camposFaltando.push('Telefone Celular');
 
       const mensagemErro = `Campos obrigatórios não preenchidos: ${camposFaltando.join(', ')}`;
-      console.error('❌ Validação falhou:', mensagemErro);
-      console.error('Detalhes:', { nomeValido, cpfValido, telefoneValido });
       setErro(mensagemErro);
       setLoading(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -228,22 +196,15 @@ const CadastroClienteCompleto = () => {
     }
 
     try {
-      console.log('📤 Enviando dados para o backend...');
-
-      let response;
       if (isPublicAccess) {
         // Acesso público: usar rota pública específica
-        console.log('🌐 Usando rota pública com link:', linkPublico);
         const axios = (await import('axios')).default;
         const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-        response = await axios.post(`${API_URL}/clientes/publico/${linkPublico}`, formData);
+        await axios.post(`${API_URL}/clientes/publico/${linkPublico}`, formData);
       } else {
         // Acesso autenticado: usar rota normal
-        console.log('🔐 Usando rota autenticada');
-        response = await clientesAPI.criar(formData);
+        await clientesAPI.criar(formData);
       }
-
-      console.log('✅ Cliente cadastrado com sucesso:', response.data);
 
       if (isPublicAccess) {
         setSucesso('Cadastro realizado com sucesso! Em breve entraremos em contato.');
@@ -268,7 +229,6 @@ const CadastroClienteCompleto = () => {
         }, 2000);
       }
     } catch (error) {
-      console.error('❌ Erro ao cadastrar:', error);
       const mensagemErro = error.response?.data?.error || 'Erro ao cadastrar cliente. Tente novamente.';
       setErro(mensagemErro);
       window.scrollTo({ top: 0, behavior: 'smooth' });

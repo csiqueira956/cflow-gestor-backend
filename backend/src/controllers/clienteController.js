@@ -15,13 +15,18 @@ const validarCPF = (cpf) => {
 // Listar clientes
 export const listarClientes = async (req, res) => {
   try {
-    const { role, id: userId, equipe_id } = req.user;
+    const { role, id: userId, equipe_id, company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     let clientes;
 
     if (role === 'vendedor') {
       // Vendedor vê apenas seus próprios clientes
-      clientes = await Cliente.list(userId);
+      clientes = await Cliente.list(companyId, userId);
     } else if (role === 'gerente') {
       // Gerente vê clientes de todos os vendedores da sua equipe
       if (!equipe_id) {
@@ -32,10 +37,10 @@ export const listarClientes = async (req, res) => {
       const vendedoresIds = vendedoresEquipe.map(v => v.id);
 
       // Buscar clientes de todos os vendedores da equipe
-      clientes = await Cliente.listByVendedores(vendedoresIds);
+      clientes = await Cliente.listByVendedores(companyId, vendedoresIds);
     } else {
-      // Admin vê todos os clientes
-      clientes = await Cliente.list(null);
+      // Admin vê todos os clientes da empresa
+      clientes = await Cliente.list(companyId, null);
     }
 
     res.json({
@@ -52,11 +57,16 @@ export const listarClientes = async (req, res) => {
 export const buscarCliente = async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, id: vendedorId } = req.user;
+    const { role, id: vendedorId, company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     const vendedorIdFiltro = role === 'vendedor' ? vendedorId : null;
 
-    const cliente = await Cliente.findById(id, vendedorIdFiltro);
+    const cliente = await Cliente.findById(id, companyId, vendedorIdFiltro);
 
     if (!cliente) {
       return res.status(404).json({ error: 'Cliente não encontrado' });
@@ -73,7 +83,12 @@ export const buscarCliente = async (req, res) => {
 export const criarCliente = async (req, res) => {
   try {
     const { nome, cpf, telefone, email, valor_carta, administradora, grupo, cota, observacao, etapa } = req.body;
-    const { id: vendedorId } = req.user;
+    const { id: vendedorId, company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     // Validações
     if (!nome || !telefone) {
@@ -99,7 +114,7 @@ export const criarCliente = async (req, res) => {
       vendedor_id: vendedorId
     };
 
-    const novoCliente = await Cliente.create(clienteData);
+    const novoCliente = await Cliente.create(clienteData, companyId);
 
     res.status(201).json({
       message: 'Cliente criado com sucesso',
@@ -115,8 +130,13 @@ export const criarCliente = async (req, res) => {
 export const atualizarCliente = async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, id: vendedorId } = req.user;
+    const { role, id: vendedorId, company_id } = req.user;
+    const companyId = req.companyId || company_id;
     const clienteData = req.body;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     // Validar CPF se fornecido
     if (clienteData.cpf && !validarCPF(clienteData.cpf)) {
@@ -130,7 +150,7 @@ export const atualizarCliente = async (req, res) => {
 
     const vendedorIdFiltro = role === 'vendedor' ? vendedorId : null;
 
-    const clienteAtualizado = await Cliente.update(id, clienteData, vendedorIdFiltro);
+    const clienteAtualizado = await Cliente.update(id, clienteData, companyId, vendedorIdFiltro);
 
     if (!clienteAtualizado) {
       return res.status(404).json({ error: 'Cliente não encontrado' });
@@ -151,7 +171,12 @@ export const atualizarEtapa = async (req, res) => {
   try {
     const { id } = req.params;
     const { etapa } = req.body;
-    const { role, id: vendedorId } = req.user;
+    const { role, id: vendedorId, company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     if (!etapa) {
       return res.status(400).json({ error: 'Etapa é obrigatória' });
@@ -164,7 +189,7 @@ export const atualizarEtapa = async (req, res) => {
 
     const vendedorIdFiltro = role === 'vendedor' ? vendedorId : null;
 
-    const clienteAtualizado = await Cliente.updateEtapa(id, etapa, vendedorIdFiltro);
+    const clienteAtualizado = await Cliente.updateEtapa(id, etapa, companyId, vendedorIdFiltro);
 
     if (!clienteAtualizado) {
       return res.status(404).json({ error: 'Cliente não encontrado' });
@@ -184,11 +209,16 @@ export const atualizarEtapa = async (req, res) => {
 export const deletarCliente = async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, id: vendedorId } = req.user;
+    const { role, id: vendedorId, company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     const vendedorIdFiltro = role === 'vendedor' ? vendedorId : null;
 
-    const clienteDeletado = await Cliente.delete(id, vendedorIdFiltro);
+    const clienteDeletado = await Cliente.delete(id, companyId, vendedorIdFiltro);
 
     if (!clienteDeletado) {
       return res.status(404).json({ error: 'Cliente não encontrado' });
@@ -204,10 +234,16 @@ export const deletarCliente = async (req, res) => {
 // Estatísticas por etapa
 export const estatisticas = async (req, res) => {
   try {
-    const { role, id: vendedorId } = req.user;
+    const { role, id: vendedorId, company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
     const vendedorIdFiltro = role === 'vendedor' ? vendedorId : null;
 
-    const estatisticas = await Cliente.estatisticasPorEtapa(vendedorIdFiltro);
+    const estatisticas = await Cliente.estatisticasPorEtapa(companyId, vendedorIdFiltro);
 
     res.json({ estatisticas });
   } catch (error) {
@@ -219,39 +255,24 @@ export const estatisticas = async (req, res) => {
 // Criar cliente via link público (sem autenticação)
 export const criarClientePublico = async (req, res) => {
   try {
-    console.log('📝 Recebida requisição pública de cadastro');
-    console.log('Link público:', req.params.linkPublico);
-
     const { linkPublico } = req.params;
     const formData = req.body;
-
-    console.log('Dados recebidos:', {
-      nome: formData.nome,
-      cpf: formData.cpf,
-      telefone_celular: formData.telefone_celular,
-      email: formData.email
-    });
 
     // Buscar vendedor pelo link público
     const Usuario = (await import('../models/Usuario.js')).default;
     const vendedor = await Usuario.findByLinkPublico(linkPublico);
 
     if (!vendedor) {
-      console.error('❌ Link público inválido:', linkPublico);
       return res.status(404).json({ error: 'Link de cadastro inválido ou expirado' });
     }
 
-    console.log('✅ Vendedor encontrado:', vendedor.nome);
-
     // Validações básicas
     if (!formData.nome || !formData.cpf || !formData.telefone_celular) {
-      console.error('❌ Campos obrigatórios faltando');
       return res.status(400).json({ error: 'Nome, CPF e telefone são obrigatórios' });
     }
 
     // Validar CPF
     if (!validarCPF(formData.cpf)) {
-      console.error('❌ CPF inválido:', formData.cpf);
       return res.status(400).json({ error: 'CPF inválido' });
     }
 
@@ -331,16 +352,13 @@ export const criarClientePublico = async (req, res) => {
       vendedor_id: vendedor.id
     };
 
-    console.log('💾 Criando cliente com dados:', {
-      nome: clienteData.nome,
-      cpf: clienteData.cpf,
-      telefone: clienteData.telefone,
-      vendedor_id: clienteData.vendedor_id
-    });
+    // Usar o company_id do vendedor para multi-tenancy
+    const companyId = vendedor.company_id;
+    if (!companyId) {
+      return res.status(500).json({ error: 'Erro de configuração do vendedor' });
+    }
 
-    const novoCliente = await Cliente.create(clienteData);
-
-    console.log('✅ Cliente criado com sucesso:', novoCliente.id);
+    const novoCliente = await Cliente.create(clienteData, companyId);
 
     // Enviar emails em paralelo (não bloqueia a resposta)
     Promise.all([
@@ -348,15 +366,8 @@ export const criarClientePublico = async (req, res) => {
       enviarEmailCadastroCliente(clienteData),
       // Email para o vendedor com notificação
       enviarEmailNotificacaoVendedor(vendedor.email, vendedor.nome, clienteData)
-    ]).then(([resultCliente, resultVendedor]) => {
-      if (resultCliente.success) {
-        console.log('📧 Email enviado para o cliente');
-      }
-      if (resultVendedor.success) {
-        console.log('📧 Email enviado para o vendedor');
-      }
-    }).catch(error => {
-      console.error('⚠️  Erro ao enviar emails (não crítico):', error);
+    ]).catch(error => {
+      console.error('Erro ao enviar emails:', error);
     });
 
     res.status(201).json({
@@ -367,7 +378,7 @@ export const criarClientePublico = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erro ao criar cliente público:', error);
+    console.error('Erro ao criar cliente público:', error);
     res.status(500).json({ error: 'Erro ao realizar cadastro. Tente novamente.' });
   }
 };

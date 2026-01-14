@@ -52,7 +52,6 @@ export const register = async (req, res) => {
 // Login de usuário
 export const login = async (req, res) => {
   try {
-    console.log('📥 Tentativa de login recebida:', { email: req.body.email });
     const { email, senha } = req.body;
 
     // Validação básica
@@ -62,17 +61,13 @@ export const login = async (req, res) => {
 
     // Buscar usuário
     const usuario = await Usuario.findByEmail(email);
-    console.log('🔍 Usuário encontrado:', usuario ? 'SIM' : 'NÃO');
     if (!usuario) {
-      console.log('❌ Usuário não encontrado');
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     // Verificar senha
     const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
-    console.log('🔐 Senha válida:', senhaValida ? 'SIM' : 'NÃO');
     if (!senhaValida) {
-      console.log('❌ Senha inválida');
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
@@ -87,7 +82,6 @@ export const login = async (req, res) => {
       equipe_id: usuario.equipe_id
     });
 
-    console.log('✅ Login bem-sucedido para:', usuario.nome);
     res.json({
       message: 'Login realizado com sucesso',
       token,
@@ -136,9 +130,7 @@ export const verificarToken = async (req, res) => {
 // Atualizar perfil do usuário logado
 export const updateProfile = async (req, res) => {
   try {
-    console.log('📝 Atualizando perfil do usuário:', req.user.id);
     const { nome, celular, foto_perfil } = req.body;
-    console.log('Dados recebidos:', { nome, celular: celular?.substring(0, 5) + '...', foto_perfil: foto_perfil ? 'Foto presente' : 'Sem foto' });
 
     if (!nome) {
       return res.status(400).json({ error: 'Nome é obrigatório' });
@@ -149,8 +141,6 @@ export const updateProfile = async (req, res) => {
       celular,
       foto_perfil
     });
-
-    console.log('✅ Perfil atualizado com sucesso:', usuarioAtualizado.nome);
 
     res.json({
       message: 'Perfil atualizado com sucesso',
@@ -167,7 +157,7 @@ export const updateProfile = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erro ao atualizar perfil:', error);
+    console.error('Erro ao atualizar perfil:', error);
     res.status(500).json({ error: 'Erro ao atualizar perfil' });
   }
 };
@@ -203,13 +193,11 @@ export const requestPasswordReset = async (req, res) => {
 
     await sendPasswordResetEmail(usuario.email, usuario.nome, resetUrl);
 
-    console.log('📧 Email de recuperação enviado para:', email);
-
     res.json({
       message: 'Se o e-mail existir em nossa base, você receberá instruções de recuperação.'
     });
   } catch (error) {
-    console.error('❌ Erro ao solicitar reset de senha:', error);
+    console.error('Erro ao solicitar reset de senha:', error);
     res.status(500).json({ error: 'Erro ao processar solicitação' });
   }
 };
@@ -236,7 +224,7 @@ export const verifyResetToken = async (req, res) => {
       nome: resetData.nome
     });
   } catch (error) {
-    console.error('❌ Erro ao verificar token:', error);
+    console.error('Erro ao verificar token:', error);
     res.status(500).json({ error: 'Erro ao verificar token' });
   }
 };
@@ -273,11 +261,9 @@ export const resetPassword = async (req, res) => {
     // Marcar token como usado
     await PasswordReset.markAsUsed(token);
 
-    console.log('🔐 Senha resetada com sucesso para:', resetData.email);
-
     res.json({ message: 'Senha alterada com sucesso! Você já pode fazer login.' });
   } catch (error) {
-    console.error('❌ Erro ao resetar senha:', error);
+    console.error('Erro ao resetar senha:', error);
     res.status(500).json({ error: 'Erro ao resetar senha' });
   }
 };

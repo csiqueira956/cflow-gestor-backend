@@ -3,6 +3,13 @@ import Meta from '../models/Meta.js';
 // Listar todas as metas
 export const listarMetas = async (req, res) => {
   try {
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
     const filtros = {
       tipo: req.query.tipo,
       vendedor_id: req.query.vendedor_id,
@@ -11,7 +18,7 @@ export const listarMetas = async (req, res) => {
       status: req.query.status
     };
 
-    const metas = await Meta.list(filtros);
+    const metas = await Meta.list(companyId, filtros);
     res.json({ metas });
   } catch (error) {
     console.error('Erro ao listar metas:', error);
@@ -23,7 +30,14 @@ export const listarMetas = async (req, res) => {
 export const buscarMeta = async (req, res) => {
   try {
     const { id } = req.params;
-    const meta = await Meta.findById(id);
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const meta = await Meta.findById(id, companyId);
 
     if (!meta) {
       return res.status(404).json({ error: 'Meta não encontrada' });
@@ -39,6 +53,13 @@ export const buscarMeta = async (req, res) => {
 // Criar nova meta
 export const criarMeta = async (req, res) => {
   try {
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
     const {
       titulo,
       descricao,
@@ -96,7 +117,7 @@ export const criarMeta = async (req, res) => {
       valor_meta,
       mes_referencia,
       status: status || 'ativa'
-    });
+    }, companyId);
 
     res.status(201).json({ meta: novaMeta });
   } catch (error) {
@@ -109,6 +130,13 @@ export const criarMeta = async (req, res) => {
 export const atualizarMeta = async (req, res) => {
   try {
     const { id } = req.params;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
     const {
       titulo,
       descricao,
@@ -121,7 +149,7 @@ export const atualizarMeta = async (req, res) => {
     } = req.body;
 
     // Verificar se meta existe
-    const metaExistente = await Meta.findById(id);
+    const metaExistente = await Meta.findById(id, companyId);
     if (!metaExistente) {
       return res.status(404).json({ error: 'Meta não encontrada' });
     }
@@ -172,7 +200,7 @@ export const atualizarMeta = async (req, res) => {
       valor_meta,
       mes_referencia,
       status: status || metaExistente.status
-    });
+    }, companyId);
 
     res.json({ meta: metaAtualizada });
   } catch (error) {
@@ -185,14 +213,20 @@ export const atualizarMeta = async (req, res) => {
 export const deletarMeta = async (req, res) => {
   try {
     const { id } = req.params;
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
 
     // Verificar se meta existe
-    const meta = await Meta.findById(id);
+    const meta = await Meta.findById(id, companyId);
     if (!meta) {
       return res.status(404).json({ error: 'Meta não encontrada' });
     }
 
-    await Meta.delete(id);
+    await Meta.delete(id, companyId);
     res.json({ message: 'Meta deletada com sucesso' });
   } catch (error) {
     console.error('Erro ao deletar meta:', error);

@@ -2,7 +2,12 @@ import pool from '../config/database.js';
 
 class Cliente {
   // Criar novo cliente com TODOS os campos do formulário
-  static async create(clienteData) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async create(clienteData, companyId) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para criar cliente');
+    }
+
     const {
       // Dados Básicos
       nome,
@@ -91,14 +96,14 @@ class Cliente {
         forma_pagamento_demais, nome_correntista, cpf_correntista, banco_debito, agencia_debito, conta_debito,
         aceita_seguro,
         valor_carta, administradora, grupo, cota, observacao,
-        etapa, vendedor_id
+        etapa, vendedor_id, company_id
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
         $12, $13, $14, $15, $16, $17, $18, $19,
         $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
         $30, $31, $32, $33, $34, $35, $36, $37,
-        $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51
+        $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52
       )
       RETURNING *
     `;
@@ -115,7 +120,7 @@ class Cliente {
       forma_pagamento_demais, nome_correntista, cpf_correntista, banco_debito, agencia_debito, conta_debito,
       aceita_seguro,
       valor_carta, administradora, grupo, cota, observacao,
-      etapa, vendedor_id
+      etapa, vendedor_id, companyId
     ];
 
     const result = await pool.query(query, values);
@@ -123,17 +128,23 @@ class Cliente {
   }
 
   // Listar clientes (com filtro por vendedor se não for admin)
-  static async list(vendedorId = null) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async list(companyId, vendedorId = null) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para listar clientes');
+    }
+
     let query = `
       SELECT c.*, u.nome as vendedor_nome
       FROM clientes c
       LEFT JOIN usuarios u ON c.vendedor_id = u.id
+      WHERE c.company_id = $1
     `;
 
-    const values = [];
+    const values = [companyId];
 
     if (vendedorId) {
-      query += ' WHERE c.vendedor_id = $1';
+      query += ' AND c.vendedor_id = $2';
       values.push(vendedorId);
     }
 
@@ -144,39 +155,49 @@ class Cliente {
   }
 
   // Listar clientes por lista de vendedores (para gerentes)
-  static async listByVendedores(vendedoresIds) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async listByVendedores(companyId, vendedoresIds) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para listar clientes');
+    }
+
     if (!vendedoresIds || vendedoresIds.length === 0) {
       return [];
     }
 
-    // Criar placeholders para o IN clause: $1, $2, $3, etc
-    const placeholders = vendedoresIds.map((_, i) => `$${i + 1}`).join(', ');
+    // Criar placeholders para o IN clause: $2, $3, $4, etc (começando em 2 pois $1 é company_id)
+    const placeholders = vendedoresIds.map((_, i) => `$${i + 2}`).join(', ');
 
     const query = `
       SELECT c.*, u.nome as vendedor_nome
       FROM clientes c
       LEFT JOIN usuarios u ON c.vendedor_id = u.id
-      WHERE c.vendedor_id IN (${placeholders})
+      WHERE c.company_id = $1 AND c.vendedor_id IN (${placeholders})
       ORDER BY c.created_at DESC
     `;
 
-    const result = await pool.query(query, vendedoresIds);
+    const result = await pool.query(query, [companyId, ...vendedoresIds]);
     return result.rows;
   }
 
   // Buscar cliente por ID
-  static async findById(id, vendedorId = null) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async findById(id, companyId, vendedorId = null) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para buscar cliente');
+    }
+
     let query = `
       SELECT c.*, u.nome as vendedor_nome
       FROM clientes c
       LEFT JOIN usuarios u ON c.vendedor_id = u.id
-      WHERE c.id = $1
+      WHERE c.id = $1 AND c.company_id = $2
     `;
 
-    const values = [id];
+    const values = [id, companyId];
 
     if (vendedorId) {
-      query += ' AND c.vendedor_id = $2';
+      query += ' AND c.vendedor_id = $3';
       values.push(vendedorId);
     }
 
@@ -185,7 +206,12 @@ class Cliente {
   }
 
   // Atualizar cliente
-  static async update(id, clienteData, vendedorId = null) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async update(id, clienteData, companyId, vendedorId = null) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para atualizar cliente');
+    }
+
     const {
       // Dados Básicos
       nome,
@@ -272,7 +298,7 @@ class Cliente {
           banco_debito = $40, agencia_debito = $41, conta_debito = $42,
           aceita_seguro = $43,
           valor_carta = $44, administradora = $45, grupo = $46, cota = $47, observacao = $48, etapa = $49
-      WHERE id = $50
+      WHERE id = $50 AND company_id = $51
     `;
 
     const values = [
@@ -287,11 +313,11 @@ class Cliente {
       forma_pagamento_demais, nome_correntista, cpf_correntista, banco_debito, agencia_debito, conta_debito,
       aceita_seguro,
       valor_carta, administradora, grupo, cota, observacao, etapa,
-      id
+      id, companyId
     ];
 
     if (vendedorId) {
-      query += ' AND vendedor_id = $51';
+      query += ' AND vendedor_id = $52';
       values.push(vendedorId);
     }
 
@@ -302,12 +328,17 @@ class Cliente {
   }
 
   // Atualizar apenas a etapa (para o Kanban)
-  static async updateEtapa(id, etapa, vendedorId = null) {
-    let query = 'UPDATE clientes SET etapa = $1 WHERE id = $2';
-    const values = [etapa, id];
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async updateEtapa(id, etapa, companyId, vendedorId = null) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para atualizar etapa');
+    }
+
+    let query = 'UPDATE clientes SET etapa = $1 WHERE id = $2 AND company_id = $3';
+    const values = [etapa, id, companyId];
 
     if (vendedorId) {
-      query += ' AND vendedor_id = $3';
+      query += ' AND vendedor_id = $4';
       values.push(vendedorId);
     }
 
@@ -318,12 +349,17 @@ class Cliente {
   }
 
   // Deletar cliente
-  static async delete(id, vendedorId = null) {
-    let query = 'DELETE FROM clientes WHERE id = $1';
-    const values = [id];
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async delete(id, companyId, vendedorId = null) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para deletar cliente');
+    }
+
+    let query = 'DELETE FROM clientes WHERE id = $1 AND company_id = $2';
+    const values = [id, companyId];
 
     if (vendedorId) {
-      query += ' AND vendedor_id = $2';
+      query += ' AND vendedor_id = $3';
       values.push(vendedorId);
     }
 
@@ -334,16 +370,22 @@ class Cliente {
   }
 
   // Estatísticas por etapa
-  static async estatisticasPorEtapa(vendedorId = null) {
+  // IMPORTANTE: company_id é obrigatório para isolamento multi-tenant
+  static async estatisticasPorEtapa(companyId, vendedorId = null) {
+    if (!companyId) {
+      throw new Error('company_id é obrigatório para estatísticas');
+    }
+
     let query = `
       SELECT etapa, COUNT(*) as total
       FROM clientes
+      WHERE company_id = $1
     `;
 
-    const values = [];
+    const values = [companyId];
 
     if (vendedorId) {
-      query += ' WHERE vendedor_id = $1';
+      query += ' AND vendedor_id = $2';
       values.push(vendedorId);
     }
 
