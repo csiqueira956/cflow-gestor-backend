@@ -10,6 +10,8 @@ const Billing = () => {
   const [invoices, setInvoices] = useState([]);
   const [plans, setPlans] = useState([]);
   const [stats, setStats] = useState(null);
+  const [usage, setUsage] = useState(null);
+  const [nextInvoice, setNextInvoice] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -22,17 +24,21 @@ const Billing = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [summaryRes, invoicesRes, plansRes, statsRes] = await Promise.all([
+      const [summaryRes, invoicesRes, plansRes, statsRes, usageRes, nextInvoiceRes] = await Promise.all([
         subscriptionAPI.summary(),
         billingAPI.listInvoices({ limit: 10 }),
         plansAPI.listar(),
         billingAPI.getStats(),
+        subscriptionAPI.usage(),
+        billingAPI.getNextInvoice(),
       ]);
 
       setSubscription(summaryRes.data.data.subscription);
       setInvoices(invoicesRes.data.data);
       setPlans(plansRes.data.data || []);
       setStats(statsRes.data.data);
+      setUsage(usageRes.data.data);
+      setNextInvoice(nextInvoiceRes.data.data);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar informações de billing');
@@ -53,6 +59,7 @@ const Billing = () => {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
 
@@ -101,6 +108,17 @@ const Billing = () => {
     const daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
 
     return daysLeft > 0 ? daysLeft : 0;
+  };
+
+  const getUsagePercentage = (current, max) => {
+    if (!max || max === 0) return 0;
+    return Math.min((current / max) * 100, 100);
+  };
+
+  const getUsageColor = (percentage) => {
+    if (percentage >= 90) return 'bg-red-500';
+    if (percentage >= 70) return 'bg-yellow-500';
+    return 'bg-green-500';
   };
 
   const handleUpgrade = async (planId) => {
@@ -152,6 +170,19 @@ const Billing = () => {
     }
   };
 
+  // Parsear features do plano (podem vir como string JSON ou array)
+  const getPlanFeatures = () => {
+    if (!subscription?.features) return [];
+    try {
+      if (typeof subscription.features === 'string') {
+        return JSON.parse(subscription.features);
+      }
+      return subscription.features;
+    } catch {
+      return [];
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -163,13 +194,14 @@ const Billing = () => {
   }
 
   const daysLeftInTrial = getDaysLeftInTrial();
+  const planFeatures = getPlanFeatures();
 
   return (
     <Layout>
       <div className="p-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Assinatura e Billing</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Assinatura</h1>
           <p className="text-gray-600 mt-2">Gerencie sua assinatura e pagamentos</p>
         </div>
 
@@ -192,58 +224,192 @@ const Billing = () => {
           </div>
         )}
 
-        {/* Current Subscription Card */}
-        {subscription && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Plano Atual</h2>
-              {getStatusBadge(subscription.status)}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <p className="text-gray-600 text-sm mb-1">Plano</p>
-                <p className="text-2xl font-bold text-gray-900">{subscription.plan_name}</p>
+        {/* Next Invoice Alert */}
+        {nextInvoice && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6 rounded-r-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <svg className="w-6 h-6 text-yellow-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <p className="text-yellow-900 font-semibold">
+                    Próxima fatura: {formatPrice(nextInvoice.amount)}
+                  </p>
+                  <p className="text-yellow-700 text-sm mt-1">
+                    Vencimento: {formatDate(nextInvoice.due_date)}
+                  </p>
+                </div>
               </div>
-
-              <div>
-                <p className="text-gray-600 text-sm mb-1">Valor</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {formatPrice(subscription.plan_price)}
-                  <span className="text-sm font-normal text-gray-600">/mês</span>
-                </p>
+              <div className="flex gap-2">
+                {nextInvoice.gateway_invoice_url && (
+                  <a
+                    href={nextInvoice.gateway_invoice_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Pagar Agora
+                  </a>
+                )}
               </div>
-
-              <div>
-                <p className="text-gray-600 text-sm mb-1">
-                  {subscription.status === 'trialing' ? 'Trial termina em' : 'Próxima cobrança'}
-                </p>
-                <p className="text-lg font-semibold text-gray-900">
-                  {formatDate(
-                    subscription.status === 'trialing'
-                      ? subscription.trial_ends_at
-                      : subscription.current_period_end
-                  )}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-gray-200 flex gap-4">
-              <button
-                onClick={() => setShowUpgradeModal(true)}
-                className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors"
-              >
-                Mudar Plano
-              </button>
-              <button
-                onClick={() => setShowCancelModal(true)}
-                className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-medium transition-colors"
-              >
-                Cancelar Assinatura
-              </button>
             </div>
           </div>
         )}
+
+        {/* Grid principal com duas colunas */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          {/* Current Subscription Card */}
+          {subscription && (
+            <div className="lg:col-span-2 bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Plano Atual</h2>
+                {getStatusBadge(subscription.status)}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <p className="text-gray-600 text-sm mb-1">Plano</p>
+                  <p className="text-2xl font-bold text-gray-900">{subscription.plan_name}</p>
+                </div>
+
+                <div>
+                  <p className="text-gray-600 text-sm mb-1">Valor</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {formatPrice(subscription.plan_price)}
+                    <span className="text-sm font-normal text-gray-600">/mês</span>
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-gray-600 text-sm mb-1">
+                    {subscription.status === 'trialing' ? 'Trial termina em' : 'Próxima cobrança'}
+                  </p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {formatDate(
+                      subscription.status === 'trialing'
+                        ? subscription.trial_ends_at
+                        : subscription.current_period_end
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Plan Features */}
+              {planFeatures.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Recursos do plano</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {planFeatures.map((feature, index) => (
+                      <div key={index} className="flex items-center text-sm text-gray-600">
+                        <svg className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6 pt-6 border-t border-gray-200 flex gap-4">
+                <button
+                  onClick={() => setShowUpgradeModal(true)}
+                  className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors"
+                >
+                  Mudar Plano
+                </button>
+                <button
+                  onClick={() => setShowCancelModal(true)}
+                  className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-medium transition-colors"
+                >
+                  Cancelar Assinatura
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Usage Card */}
+          {usage && (
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Uso do Plano</h2>
+
+              {/* Usuários */}
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm text-gray-600">Usuários</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {usage.usage.users} / {usage.limits.max_users}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${getUsageColor(getUsagePercentage(usage.usage.users, usage.limits.max_users))}`}
+                    style={{ width: `${getUsagePercentage(usage.usage.users, usage.limits.max_users)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Leads */}
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm text-gray-600">Leads/Clientes</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {usage.usage.leads} / {usage.limits.max_leads}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${getUsageColor(getUsagePercentage(usage.usage.leads, usage.limits.max_leads))}`}
+                    style={{ width: `${getUsagePercentage(usage.usage.leads, usage.limits.max_leads)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Equipes */}
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm text-gray-600">Equipes</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {usage.usage.equipes} / {usage.limits.max_equipes}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${getUsageColor(getUsagePercentage(usage.usage.equipes, usage.limits.max_equipes))}`}
+                    style={{ width: `${getUsagePercentage(usage.usage.equipes, usage.limits.max_equipes)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Armazenamento */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm text-gray-600">Armazenamento</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {usage.usage.storage_gb || 0} GB / {usage.limits.max_storage_gb} GB
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${getUsageColor(getUsagePercentage(usage.usage.storage_gb || 0, usage.limits.max_storage_gb))}`}
+                    style={{ width: `${getUsagePercentage(usage.usage.storage_gb || 0, usage.limits.max_storage_gb)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Alerta de limite próximo */}
+              {(getUsagePercentage(usage.usage.users, usage.limits.max_users) >= 80 ||
+                getUsagePercentage(usage.usage.leads, usage.limits.max_leads) >= 80) && (
+                <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+                  <p className="text-xs text-yellow-800">
+                    Você está próximo do limite do plano. Considere fazer upgrade para continuar crescendo.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Stats Cards */}
         {stats && (
@@ -318,16 +484,45 @@ const Billing = () => {
                         {formatDate(invoice.due_date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {invoice.gateway_invoice_url && (
-                          <a
-                            href={invoice.gateway_invoice_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary-600 hover:text-primary-700 font-medium"
-                          >
-                            Ver Boleto
-                          </a>
-                        )}
+                        <div className="flex gap-2">
+                          {invoice.gateway_invoice_url && (
+                            <a
+                              href={invoice.gateway_invoice_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary-600 hover:text-primary-700 font-medium"
+                              title="Ver fatura"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </a>
+                          )}
+                          {invoice.boleto_url && (
+                            <a
+                              href={invoice.boleto_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gray-600 hover:text-gray-700 font-medium"
+                              title="Baixar boleto PDF"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </a>
+                          )}
+                          {invoice.status === 'pending' && invoice.gateway_invoice_url && (
+                            <a
+                              href={invoice.gateway_invoice_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-green-600 hover:text-green-700 font-medium text-xs bg-green-50 px-2 py-1 rounded"
+                            >
+                              Pagar
+                            </a>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

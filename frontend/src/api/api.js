@@ -125,6 +125,7 @@ export const plansAPI = {
 // Funções de assinatura (SaaS)
 export const subscriptionAPI = {
   summary: () => api.get('/subscription/summary'),
+  usage: () => api.get('/subscription/usage'),
   createTrial: () => api.post('/subscription/trial'),
   upgrade: (planId) => api.post('/subscription/upgrade', { planId }),
   downgrade: (planId) => api.post('/subscription/downgrade', { planId }),

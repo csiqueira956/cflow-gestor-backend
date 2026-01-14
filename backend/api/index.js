@@ -364,9 +364,17 @@ app.get('/api/subscription/summary', async (req, res) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
 
-    // Buscar assinatura da empresa
+    // Buscar assinatura da empresa com todos os dados do plano
     const result = await pool.query(`
-      SELECT s.*, p.name as plan_name, p.price, p.billing_cycle
+      SELECT s.*,
+             p.name as plan_name,
+             p.price as plan_price,
+             p.billing_cycle,
+             p.max_users,
+             p.max_leads,
+             p.max_storage_gb,
+             p.max_equipes,
+             p.features
       FROM subscriptions s
       JOIN plans p ON s.plan_id = p.id
       WHERE s.company_id = $1
@@ -386,6 +394,74 @@ app.get('/api/subscription/summary', async (req, res) => {
   } catch (error) {
     console.error('Erro ao buscar assinatura:', error);
     res.status(500).json({ error: 'Erro ao buscar assinatura' });
+  }
+});
+
+// Subscription - Estatísticas de uso (usuários, leads, etc.)
+app.get('/api/subscription/usage', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const companyId = decoded.company_id;
+
+    // Contar usuários da empresa
+    const usersResult = await pool.query(
+      'SELECT COUNT(*) as count FROM usuarios WHERE company_id = $1',
+      [companyId]
+    );
+
+    // Contar clientes/leads da empresa
+    const leadsResult = await pool.query(
+      'SELECT COUNT(*) as count FROM clientes WHERE company_id = $1',
+      [companyId]
+    );
+
+    // Contar equipes da empresa
+    const equipesResult = await pool.query(
+      'SELECT COUNT(*) as count FROM equipes WHERE company_id = $1',
+      [companyId]
+    );
+
+    // Buscar limites do plano atual
+    const planResult = await pool.query(`
+      SELECT p.max_users, p.max_leads, p.max_storage_gb, p.max_equipes
+      FROM subscriptions s
+      JOIN plans p ON s.plan_id = p.id
+      WHERE s.company_id = $1
+      ORDER BY s.created_at DESC
+      LIMIT 1
+    `, [companyId]);
+
+    const limits = planResult.rows[0] || {
+      max_users: 5,
+      max_leads: 100,
+      max_storage_gb: 1,
+      max_equipes: 1
+    };
+
+    res.json({
+      data: {
+        usage: {
+          users: parseInt(usersResult.rows[0].count),
+          leads: parseInt(leadsResult.rows[0].count),
+          equipes: parseInt(equipesResult.rows[0].count),
+          storage_gb: 0 // Pode ser implementado futuramente
+        },
+        limits: {
+          max_users: limits.max_users,
+          max_leads: limits.max_leads,
+          max_storage_gb: limits.max_storage_gb,
+          max_equipes: limits.max_equipes
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar uso:', error);
+    res.status(500).json({ error: 'Erro ao buscar estatísticas de uso' });
   }
 });
 
@@ -2147,49 +2223,404 @@ app.put('/api/admin/assinaturas/empresa/:companyId', verifySuperAdmin, async (re
 });
 
 // ============================================
-// ROTAS DE BILLING (MOCK)
+// ROTAS DE BILLING (INTEGRAÇÃO ASAAS)
 // ============================================
 
-app.get('/api/billing/invoices', (_req, res) => {
-  res.json({ data: [] });
-});
-
-app.get('/api/billing/stats', (_req, res) => {
-  res.json({
-    data: {
-      total_invoices: 0,
-      paid_invoices: 0,
-      pending_invoices: 0,
-      overdue_invoices: 0,
-      total_amount: 0,
-      paid_amount: 0,
-      pending_amount: 0
+// Listar faturas/pagamentos da empresa
+app.get('/api/billing/invoices', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
     }
-  });
-});
 
-app.get('/api/billing/next', (_req, res) => {
-  res.json({ data: null });
-});
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const companyId = decoded.company_id;
 
-app.get('/api/billing/overdue', (_req, res) => {
-  res.json({ data: [] });
-});
+    // Buscar asaas_customer_id da empresa
+    const companyResult = await pool.query(
+      'SELECT asaas_customer_id FROM companies WHERE id = $1',
+      [companyId]
+    );
 
-app.get('/api/billing/upcoming', (_req, res) => {
-  res.json({ data: [] });
-});
-
-app.get('/api/billing/dashboard', (_req, res) => {
-  res.json({
-    data: {
-      total_revenue: 0,
-      monthly_revenue: 0,
-      active_subscriptions: 0,
-      churn_rate: 0
+    if (!companyResult.rows[0]?.asaas_customer_id) {
+      return res.json({ data: [] });
     }
-  });
+
+    const asaasCustomerId = companyResult.rows[0].asaas_customer_id;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = parseInt(req.query.offset) || 0;
+
+    // Buscar pagamentos no Asaas
+    const asaasResponse = await asaasAPI.get('/payments', {
+      params: {
+        customer: asaasCustomerId,
+        limit,
+        offset
+      }
+    });
+
+    const invoices = (asaasResponse.data.data || []).map(payment => ({
+      id: payment.id,
+      description: payment.description || 'Assinatura',
+      amount: payment.value,
+      status: mapAsaasStatus(payment.status),
+      due_date: payment.dueDate,
+      created_at: payment.dateCreated,
+      paid_at: payment.paymentDate,
+      gateway_invoice_url: payment.invoiceUrl,
+      boleto_url: payment.bankSlipUrl,
+      pix_qrcode: payment.pixQrCodeUrl
+    }));
+
+    res.json({ data: invoices });
+
+  } catch (error) {
+    console.error('Erro ao listar faturas:', error.response?.data || error.message);
+    // Retorna array vazio em caso de erro para não quebrar o frontend
+    res.json({ data: [] });
+  }
 });
+
+// Estatísticas de billing
+app.get('/api/billing/stats', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const companyId = decoded.company_id;
+
+    // Buscar asaas_customer_id da empresa
+    const companyResult = await pool.query(
+      'SELECT asaas_customer_id FROM companies WHERE id = $1',
+      [companyId]
+    );
+
+    if (!companyResult.rows[0]?.asaas_customer_id) {
+      return res.json({
+        data: {
+          total_paid: 0,
+          total_pending: 0,
+          overdue_amount: 0,
+          invoice_count: 0
+        }
+      });
+    }
+
+    const asaasCustomerId = companyResult.rows[0].asaas_customer_id;
+
+    // Buscar todos os pagamentos para calcular estatísticas
+    const asaasResponse = await asaasAPI.get('/payments', {
+      params: {
+        customer: asaasCustomerId,
+        limit: 100
+      }
+    });
+
+    const payments = asaasResponse.data.data || [];
+    const now = new Date();
+
+    let total_paid = 0;
+    let total_pending = 0;
+    let overdue_amount = 0;
+
+    payments.forEach(payment => {
+      if (payment.status === 'CONFIRMED' || payment.status === 'RECEIVED') {
+        total_paid += payment.value;
+      } else if (payment.status === 'PENDING' || payment.status === 'AWAITING_RISK_ANALYSIS') {
+        total_pending += payment.value;
+        // Verificar se está vencido
+        if (new Date(payment.dueDate) < now) {
+          overdue_amount += payment.value;
+        }
+      } else if (payment.status === 'OVERDUE') {
+        overdue_amount += payment.value;
+      }
+    });
+
+    res.json({
+      data: {
+        total_paid,
+        total_pending,
+        overdue_amount,
+        invoice_count: payments.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar stats:', error.response?.data || error.message);
+    res.json({
+      data: {
+        total_paid: 0,
+        total_pending: 0,
+        overdue_amount: 0,
+        invoice_count: 0
+      }
+    });
+  }
+});
+
+// Próxima fatura
+app.get('/api/billing/next', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const companyId = decoded.company_id;
+
+    // Buscar asaas_customer_id da empresa
+    const companyResult = await pool.query(
+      'SELECT asaas_customer_id FROM companies WHERE id = $1',
+      [companyId]
+    );
+
+    if (!companyResult.rows[0]?.asaas_customer_id) {
+      return res.json({ data: null });
+    }
+
+    const asaasCustomerId = companyResult.rows[0].asaas_customer_id;
+
+    // Buscar próximo pagamento pendente
+    const asaasResponse = await asaasAPI.get('/payments', {
+      params: {
+        customer: asaasCustomerId,
+        status: 'PENDING',
+        limit: 1,
+        order: 'asc',
+        orderBy: 'dueDate'
+      }
+    });
+
+    const nextPayment = asaasResponse.data.data?.[0];
+
+    if (!nextPayment) {
+      return res.json({ data: null });
+    }
+
+    res.json({
+      data: {
+        id: nextPayment.id,
+        description: nextPayment.description || 'Assinatura',
+        amount: nextPayment.value,
+        due_date: nextPayment.dueDate,
+        gateway_invoice_url: nextPayment.invoiceUrl,
+        boleto_url: nextPayment.bankSlipUrl,
+        pix_qrcode: nextPayment.pixQrCodeUrl
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar próxima fatura:', error.response?.data || error.message);
+    res.json({ data: null });
+  }
+});
+
+// Faturas vencidas
+app.get('/api/billing/overdue', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const companyId = decoded.company_id;
+
+    const companyResult = await pool.query(
+      'SELECT asaas_customer_id FROM companies WHERE id = $1',
+      [companyId]
+    );
+
+    if (!companyResult.rows[0]?.asaas_customer_id) {
+      return res.json({ data: [] });
+    }
+
+    const asaasCustomerId = companyResult.rows[0].asaas_customer_id;
+
+    const asaasResponse = await asaasAPI.get('/payments', {
+      params: {
+        customer: asaasCustomerId,
+        status: 'OVERDUE',
+        limit: 20
+      }
+    });
+
+    const overduePayments = (asaasResponse.data.data || []).map(payment => ({
+      id: payment.id,
+      description: payment.description || 'Assinatura',
+      amount: payment.value,
+      due_date: payment.dueDate,
+      gateway_invoice_url: payment.invoiceUrl
+    }));
+
+    res.json({ data: overduePayments });
+
+  } catch (error) {
+    console.error('Erro ao buscar faturas vencidas:', error.response?.data || error.message);
+    res.json({ data: [] });
+  }
+});
+
+// Faturas próximas de vencer
+app.get('/api/billing/upcoming', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const companyId = decoded.company_id;
+    const days = parseInt(req.query.days) || 7;
+
+    const companyResult = await pool.query(
+      'SELECT asaas_customer_id FROM companies WHERE id = $1',
+      [companyId]
+    );
+
+    if (!companyResult.rows[0]?.asaas_customer_id) {
+      return res.json({ data: [] });
+    }
+
+    const asaasCustomerId = companyResult.rows[0].asaas_customer_id;
+
+    // Calcular data limite
+    const limitDate = new Date();
+    limitDate.setDate(limitDate.getDate() + days);
+
+    const asaasResponse = await asaasAPI.get('/payments', {
+      params: {
+        customer: asaasCustomerId,
+        status: 'PENDING',
+        'dueDate[le]': limitDate.toISOString().split('T')[0],
+        limit: 10
+      }
+    });
+
+    const upcomingPayments = (asaasResponse.data.data || []).map(payment => ({
+      id: payment.id,
+      description: payment.description || 'Assinatura',
+      amount: payment.value,
+      due_date: payment.dueDate,
+      gateway_invoice_url: payment.invoiceUrl
+    }));
+
+    res.json({ data: upcomingPayments });
+
+  } catch (error) {
+    console.error('Erro ao buscar faturas próximas:', error.response?.data || error.message);
+    res.json({ data: [] });
+  }
+});
+
+// Dashboard de billing
+app.get('/api/billing/dashboard', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const companyId = decoded.company_id;
+
+    const companyResult = await pool.query(
+      'SELECT asaas_customer_id FROM companies WHERE id = $1',
+      [companyId]
+    );
+
+    if (!companyResult.rows[0]?.asaas_customer_id) {
+      return res.json({
+        data: {
+          total_revenue: 0,
+          monthly_revenue: 0,
+          pending_amount: 0,
+          overdue_count: 0
+        }
+      });
+    }
+
+    const asaasCustomerId = companyResult.rows[0].asaas_customer_id;
+
+    // Buscar pagamentos do mês atual
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+
+    const asaasResponse = await asaasAPI.get('/payments', {
+      params: {
+        customer: asaasCustomerId,
+        limit: 100
+      }
+    });
+
+    const payments = asaasResponse.data.data || [];
+
+    let total_revenue = 0;
+    let monthly_revenue = 0;
+    let pending_amount = 0;
+    let overdue_count = 0;
+
+    payments.forEach(payment => {
+      if (payment.status === 'CONFIRMED' || payment.status === 'RECEIVED') {
+        total_revenue += payment.value;
+        if (payment.paymentDate >= firstDayOfMonth) {
+          monthly_revenue += payment.value;
+        }
+      } else if (payment.status === 'PENDING') {
+        pending_amount += payment.value;
+      } else if (payment.status === 'OVERDUE') {
+        overdue_count++;
+      }
+    });
+
+    res.json({
+      data: {
+        total_revenue,
+        monthly_revenue,
+        pending_amount,
+        overdue_count
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar dashboard:', error.response?.data || error.message);
+    res.json({
+      data: {
+        total_revenue: 0,
+        monthly_revenue: 0,
+        pending_amount: 0,
+        overdue_count: 0
+      }
+    });
+  }
+});
+
+// Função auxiliar para mapear status do Asaas
+function mapAsaasStatus(asaasStatus) {
+  const statusMap = {
+    'PENDING': 'pending',
+    'AWAITING_RISK_ANALYSIS': 'pending',
+    'CONFIRMED': 'paid',
+    'RECEIVED': 'paid',
+    'OVERDUE': 'failed',
+    'REFUNDED': 'cancelled',
+    'RECEIVED_IN_CASH': 'paid',
+    'REFUND_REQUESTED': 'cancelled',
+    'CHARGEBACK_REQUESTED': 'failed',
+    'CHARGEBACK_DISPUTE': 'failed',
+    'AWAITING_CHARGEBACK_REVERSAL': 'pending',
+    'DUNNING_REQUESTED': 'failed',
+    'DUNNING_RECEIVED': 'paid',
+    'AWAITING_RISK_ANALYSIS': 'pending'
+  };
+  return statusMap[asaasStatus] || 'pending';
+}
 
 // Tratamento de erros 404
 app.use((req, res) => {
