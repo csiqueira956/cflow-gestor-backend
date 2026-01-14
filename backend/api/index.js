@@ -940,35 +940,425 @@ app.delete('/api/clientes/:id', async (req, res) => {
 });
 
 // ============================================
-// ROTAS DE COMISSÕES (MOCK)
+// ROTAS DE COMISSÕES (REAL)
 // ============================================
 
-app.get('/api/comissoes', (_req, res) => {
-  res.json({ data: { comissoes: [] } });
+// Listar comissões (com filtro por role)
+app.get('/api/comissoes', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { role, id: userId, equipe_id } = decoded;
+
+    // Query base
+    let query = `
+      SELECT c.*,
+             cl.nome as cliente_nome,
+             cl.cpf as cliente_cpf,
+             cl.telefone_celular as cliente_telefone,
+             u.nome as vendedor_nome,
+             u.email as vendedor_email,
+             u.equipe_id as vendedor_equipe_id
+      FROM comissoes c
+      LEFT JOIN clientes cl ON c.cliente_id = cl.id
+      LEFT JOIN usuarios u ON c.vendedor_id = u.id
+      WHERE c.company_id = $1
+    `;
+    const values = [decoded.company_id];
+    let paramCount = 2;
+
+    // SEGURANÇA: Filtrar por role
+    if (role === 'vendedor') {
+      query += ` AND c.vendedor_id = $${paramCount}`;
+      values.push(userId);
+      paramCount++;
+    } else if (role === 'gerente') {
+      if (equipe_id) {
+        query += ` AND u.equipe_id = $${paramCount}`;
+        values.push(equipe_id);
+        paramCount++;
+      } else {
+        query += ` AND c.vendedor_id = $${paramCount}`;
+        values.push(userId);
+        paramCount++;
+      }
+    }
+
+    // Filtros opcionais (apenas admin/super_admin)
+    if (req.query.vendedor_id && (role === 'admin' || role === 'super_admin')) {
+      query += ` AND c.vendedor_id = $${paramCount}`;
+      values.push(req.query.vendedor_id);
+      paramCount++;
+    }
+
+    if (req.query.status) {
+      query += ` AND c.status = $${paramCount}`;
+      values.push(req.query.status);
+      paramCount++;
+    }
+
+    query += ' ORDER BY c.created_at DESC';
+
+    const result = await pool.query(query, values);
+
+    res.json({ data: { comissoes: result.rows } });
+  } catch (error) {
+    console.error('Erro ao listar comissões:', error);
+    res.status(500).json({ error: 'Erro ao listar comissões' });
+  }
 });
 
-app.get('/api/comissoes/:id', (_req, res) => {
-  res.status(404).json({ error: 'Comissão não encontrada' });
+// Estatísticas de comissões (DEVE vir ANTES de /api/comissoes/:id)
+app.get('/api/comissoes/estatisticas', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) as total_comissoes,
+        COALESCE(SUM(valor_comissao), 0) as total_valor,
+        COALESCE(SUM(CASE WHEN status = 'pago' THEN valor_comissao ELSE 0 END), 0) as total_pago,
+        COALESCE(SUM(CASE WHEN status = 'pendente' THEN valor_comissao ELSE 0 END), 0) as total_pendente,
+        COALESCE(SUM(CASE WHEN status = 'em_pagamento' THEN valor_comissao ELSE 0 END), 0) as total_em_pagamento
+      FROM comissoes
+      WHERE company_id = $1
+    `, [decoded.company_id]);
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao buscar estatísticas:', error);
+    res.status(500).json({ error: 'Erro ao buscar estatísticas' });
+  }
 });
 
-app.post('/api/comissoes', (_req, res) => {
-  res.status(201).json({ message: 'Comissão criada', id: 1 });
+// Buscar comissão por ID (com parcelas)
+app.get('/api/comissoes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { role, id: userId, equipe_id } = decoded;
+
+    // Buscar comissão
+    const comissaoResult = await pool.query(`
+      SELECT c.*,
+             cl.nome as cliente_nome,
+             u.nome as vendedor_nome,
+             u.equipe_id as vendedor_equipe_id
+      FROM comissoes c
+      LEFT JOIN clientes cl ON c.cliente_id = cl.id
+      LEFT JOIN usuarios u ON c.vendedor_id = u.id
+      WHERE c.id = $1 AND c.company_id = $2
+    `, [id, decoded.company_id]);
+
+    if (comissaoResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Comissão não encontrada' });
+    }
+
+    const comissao = comissaoResult.rows[0];
+
+    // SEGURANÇA: Verificar permissão
+    if (role === 'vendedor' && comissao.vendedor_id !== userId) {
+      return res.status(403).json({ error: 'Sem permissão para acessar esta comissão' });
+    }
+    if (role === 'gerente' && equipe_id && comissao.vendedor_equipe_id !== equipe_id) {
+      return res.status(403).json({ error: 'Sem permissão para acessar esta comissão' });
+    }
+
+    // Buscar parcelas
+    const parcelasResult = await pool.query(`
+      SELECT * FROM parcelas_comissao
+      WHERE comissao_id = $1
+      ORDER BY numero_parcela ASC
+    `, [id]);
+
+    comissao.parcelas = parcelasResult.rows;
+
+    res.json({ data: { comissao } });
+  } catch (error) {
+    console.error('Erro ao buscar comissão:', error);
+    res.status(500).json({ error: 'Erro ao buscar comissão' });
+  }
 });
 
-app.put('/api/comissoes/:id', (_req, res) => {
-  res.json({ message: 'Comissão atualizada' });
+// Criar comissão (apenas admin)
+app.post('/api/comissoes', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    // SEGURANÇA: Apenas admin pode criar comissões
+    if (!['admin', 'super_admin'].includes(decoded.role)) {
+      return res.status(403).json({ error: 'Sem permissão para criar comissões' });
+    }
+
+    const {
+      cliente_id,
+      vendedor_id,
+      valor_venda,
+      percentual_comissao,
+      numero_parcelas = 1
+    } = req.body;
+
+    // Validações
+    if (!cliente_id || !vendedor_id || !valor_venda || !percentual_comissao) {
+      return res.status(400).json({ error: 'cliente_id, vendedor_id, valor_venda e percentual_comissao são obrigatórios' });
+    }
+
+    // Calcular valor da comissão
+    const valor_comissao = (parseFloat(valor_venda) * parseFloat(percentual_comissao)) / 100;
+
+    // Criar comissão
+    const comissaoResult = await pool.query(`
+      INSERT INTO comissoes (
+        cliente_id, vendedor_id, valor_venda, percentual_comissao,
+        valor_comissao, numero_parcelas, status, company_id, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, 'pendente', $7, NOW(), NOW())
+      RETURNING *
+    `, [cliente_id, vendedor_id, valor_venda, percentual_comissao, valor_comissao, numero_parcelas, decoded.company_id]);
+
+    const comissao = comissaoResult.rows[0];
+
+    // Criar parcelas
+    const valorParcela = valor_comissao / numero_parcelas;
+    const parcelas = [];
+
+    for (let i = 1; i <= numero_parcelas; i++) {
+      const dataVencimento = new Date();
+      dataVencimento.setMonth(dataVencimento.getMonth() + i);
+      dataVencimento.setDate(10);
+
+      const parcelaResult = await pool.query(`
+        INSERT INTO parcelas_comissao (
+          comissao_id, numero_parcela, valor_parcela,
+          data_vencimento, status, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, 'pendente', NOW(), NOW())
+        RETURNING *
+      `, [comissao.id, i, valorParcela, dataVencimento.toISOString().split('T')[0]]);
+
+      parcelas.push(parcelaResult.rows[0]);
+    }
+
+    // Atualizar etapa do cliente para "em_comissionamento"
+    await pool.query(
+      `UPDATE clientes SET etapa = 'em_comissionamento', updated_at = NOW() WHERE id = $1`,
+      [cliente_id]
+    );
+
+    comissao.parcelas = parcelas;
+
+    res.status(201).json({
+      message: 'Comissão criada com sucesso',
+      data: { comissao }
+    });
+  } catch (error) {
+    console.error('Erro ao criar comissão:', error);
+    res.status(500).json({ error: 'Erro ao criar comissão' });
+  }
 });
 
-app.delete('/api/comissoes/:id', (_req, res) => {
-  res.json({ message: 'Comissão deletada' });
+// Atualizar comissão (apenas admin)
+app.put('/api/comissoes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    // SEGURANÇA: Apenas admin pode atualizar comissões
+    if (!['admin', 'super_admin'].includes(decoded.role)) {
+      return res.status(403).json({ error: 'Sem permissão para atualizar comissões' });
+    }
+
+    const { status, numero_parcelas } = req.body;
+
+    // Verificar se comissão existe e pertence à empresa
+    const existingResult = await pool.query(
+      'SELECT * FROM comissoes WHERE id = $1 AND company_id = $2',
+      [id, decoded.company_id]
+    );
+
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Comissão não encontrada' });
+    }
+
+    const comissao = existingResult.rows[0];
+
+    // Se mudou o número de parcelas, recriar parcelas
+    if (numero_parcelas && numero_parcelas !== comissao.numero_parcelas) {
+      // Deletar parcelas antigas
+      await pool.query('DELETE FROM parcelas_comissao WHERE comissao_id = $1', [id]);
+
+      // Criar novas parcelas
+      const valorParcela = comissao.valor_comissao / numero_parcelas;
+
+      for (let i = 1; i <= numero_parcelas; i++) {
+        const dataVencimento = new Date();
+        dataVencimento.setMonth(dataVencimento.getMonth() + i);
+        dataVencimento.setDate(10);
+
+        await pool.query(`
+          INSERT INTO parcelas_comissao (
+            comissao_id, numero_parcela, valor_parcela,
+            data_vencimento, status, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, 'pendente', NOW(), NOW())
+        `, [id, i, valorParcela, dataVencimento.toISOString().split('T')[0]]);
+      }
+
+      // Atualizar número de parcelas na comissão
+      await pool.query(
+        'UPDATE comissoes SET numero_parcelas = $1, updated_at = NOW() WHERE id = $2',
+        [numero_parcelas, id]
+      );
+    }
+
+    // Atualizar status se fornecido
+    if (status) {
+      await pool.query(
+        'UPDATE comissoes SET status = $1, updated_at = NOW() WHERE id = $2',
+        [status, id]
+      );
+    }
+
+    // Buscar comissão atualizada com parcelas
+    const updatedResult = await pool.query(
+      'SELECT * FROM comissoes WHERE id = $1',
+      [id]
+    );
+
+    const parcelasResult = await pool.query(
+      'SELECT * FROM parcelas_comissao WHERE comissao_id = $1 ORDER BY numero_parcela ASC',
+      [id]
+    );
+
+    const updatedComissao = updatedResult.rows[0];
+    updatedComissao.parcelas = parcelasResult.rows;
+
+    res.json({
+      message: 'Comissão atualizada com sucesso',
+      data: { comissao: updatedComissao }
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar comissão:', error);
+    res.status(500).json({ error: 'Erro ao atualizar comissão' });
+  }
 });
 
-app.get('/api/comissoes/estatisticas', (_req, res) => {
-  res.json({
-    total_comissoes: 0,
-    total_pago: 0,
-    total_pendente: 0
-  });
+// Atualizar parcela individual
+app.put('/api/comissoes/parcelas/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    // SEGURANÇA: Apenas admin pode atualizar parcelas
+    if (!['admin', 'super_admin'].includes(decoded.role)) {
+      return res.status(403).json({ error: 'Sem permissão para atualizar parcelas' });
+    }
+
+    const { valor_parcela, data_vencimento, data_pagamento, status, observacao } = req.body;
+
+    // Verificar se parcela existe e pertence à empresa
+    const parcelaResult = await pool.query(
+      `SELECT p.*, c.company_id
+       FROM parcelas_comissao p
+       JOIN comissoes c ON p.comissao_id = c.id
+       WHERE p.id = $1`,
+      [id]
+    );
+
+    if (parcelaResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Parcela não encontrada' });
+    }
+
+    if (parcelaResult.rows[0].company_id !== decoded.company_id) {
+      return res.status(403).json({ error: 'Sem permissão para atualizar esta parcela' });
+    }
+
+    // Atualizar parcela
+    const updateResult = await pool.query(`
+      UPDATE parcelas_comissao SET
+        valor_parcela = COALESCE($1, valor_parcela),
+        data_vencimento = COALESCE($2, data_vencimento),
+        data_pagamento = $3,
+        status = COALESCE($4, status),
+        observacao = COALESCE($5, observacao),
+        updated_at = NOW()
+      WHERE id = $6
+      RETURNING *
+    `, [valor_parcela, data_vencimento, data_pagamento || null, status, observacao, id]);
+
+    res.json({
+      message: 'Parcela atualizada com sucesso',
+      parcela: updateResult.rows[0]
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar parcela:', error);
+    res.status(500).json({ error: 'Erro ao atualizar parcela' });
+  }
+});
+
+// Deletar comissão (apenas admin)
+app.delete('/api/comissoes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    // SEGURANÇA: Apenas admin pode deletar comissões
+    if (!['admin', 'super_admin'].includes(decoded.role)) {
+      return res.status(403).json({ error: 'Sem permissão para deletar comissões' });
+    }
+
+    // Verificar se comissão existe e pertence à empresa
+    const existingResult = await pool.query(
+      'SELECT * FROM comissoes WHERE id = $1 AND company_id = $2',
+      [id, decoded.company_id]
+    );
+
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Comissão não encontrada' });
+    }
+
+    // Deletar parcelas primeiro (ou usar CASCADE)
+    await pool.query('DELETE FROM parcelas_comissao WHERE comissao_id = $1', [id]);
+
+    // Deletar comissão
+    await pool.query('DELETE FROM comissoes WHERE id = $1', [id]);
+
+    res.json({ message: 'Comissão deletada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao deletar comissão:', error);
+    res.status(500).json({ error: 'Erro ao deletar comissão' });
+  }
 });
 
 // ============================================
