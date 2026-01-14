@@ -605,16 +605,38 @@ app.get('/api/clientes', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { role, id: userId, equipe_id } = decoded;
 
-    // Buscar clientes da empresa
-    const result = await pool.query(
-      `SELECT c.*, u.nome as vendedor_nome
-       FROM clientes c
-       LEFT JOIN usuarios u ON c.vendedor_id = u.id
-       WHERE c.company_id = $1
-       ORDER BY c.created_at DESC`,
-      [decoded.company_id]
-    );
+    // Query base com JOIN para pegar dados do vendedor
+    let query = `
+      SELECT c.*, u.nome as vendedor_nome, u.equipe_id as vendedor_equipe_id
+      FROM clientes c
+      LEFT JOIN usuarios u ON c.vendedor_id = u.id
+      WHERE c.company_id = $1
+    `;
+    const values = [decoded.company_id];
+
+    // SEGURANÇA: Filtrar por role
+    if (role === 'vendedor') {
+      // Vendedor vê apenas seus próprios clientes
+      query += ` AND c.vendedor_id = $2`;
+      values.push(userId);
+    } else if (role === 'gerente') {
+      // Gerente vê clientes de vendedores da sua equipe
+      if (equipe_id) {
+        query += ` AND u.equipe_id = $2`;
+        values.push(equipe_id);
+      } else {
+        // Se gerente não tem equipe, só vê seus próprios clientes
+        query += ` AND c.vendedor_id = $2`;
+        values.push(userId);
+      }
+    }
+    // Admin e super_admin veem todos os clientes da empresa (sem filtro adicional)
+
+    query += ` ORDER BY c.created_at DESC`;
+
+    const result = await pool.query(query, values);
 
     res.json({ data: { clientes: result.rows } });
   } catch (error) {
@@ -632,9 +654,14 @@ app.get('/api/clientes/:id', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { role, id: userId, equipe_id } = decoded;
 
+    // Buscar cliente com dados do vendedor
     const result = await pool.query(
-      'SELECT * FROM clientes WHERE id = $1 AND company_id = $2',
+      `SELECT c.*, u.equipe_id as vendedor_equipe_id
+       FROM clientes c
+       LEFT JOIN usuarios u ON c.vendedor_id = u.id
+       WHERE c.id = $1 AND c.company_id = $2`,
       [id, decoded.company_id]
     );
 
@@ -642,7 +669,17 @@ app.get('/api/clientes/:id', async (req, res) => {
       return res.status(404).json({ error: 'Cliente não encontrado' });
     }
 
-    res.json({ data: { cliente: result.rows[0] } });
+    const cliente = result.rows[0];
+
+    // SEGURANÇA: Verificar permissão por role
+    if (role === 'vendedor' && cliente.vendedor_id !== userId) {
+      return res.status(403).json({ error: 'Sem permissão para acessar este cliente' });
+    }
+    if (role === 'gerente' && equipe_id && cliente.vendedor_equipe_id !== equipe_id) {
+      return res.status(403).json({ error: 'Sem permissão para acessar este cliente' });
+    }
+
+    res.json({ data: { cliente } });
   } catch (error) {
     console.error('Erro ao buscar cliente:', error);
     res.status(500).json({ error: 'Erro ao buscar cliente' });
@@ -693,7 +730,29 @@ app.put('/api/clientes/:id', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { role, id: userId, equipe_id } = decoded;
     const c = req.body;
+
+    // SEGURANÇA: Verificar permissão antes de atualizar
+    const clienteCheck = await pool.query(
+      `SELECT c.vendedor_id, u.equipe_id as vendedor_equipe_id
+       FROM clientes c
+       LEFT JOIN usuarios u ON c.vendedor_id = u.id
+       WHERE c.id = $1 AND c.company_id = $2`,
+      [id, decoded.company_id]
+    );
+
+    if (clienteCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    const cliente = clienteCheck.rows[0];
+    if (role === 'vendedor' && cliente.vendedor_id !== userId) {
+      return res.status(403).json({ error: 'Sem permissão para editar este cliente' });
+    }
+    if (role === 'gerente' && equipe_id && cliente.vendedor_equipe_id !== equipe_id) {
+      return res.status(403).json({ error: 'Sem permissão para editar este cliente' });
+    }
 
     const result = await pool.query(
       `UPDATE clientes SET
@@ -799,6 +858,28 @@ app.patch('/api/clientes/:id/etapa', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { role, id: userId, equipe_id } = decoded;
+
+    // SEGURANÇA: Verificar permissão antes de atualizar etapa
+    const clienteCheck = await pool.query(
+      `SELECT c.vendedor_id, u.equipe_id as vendedor_equipe_id
+       FROM clientes c
+       LEFT JOIN usuarios u ON c.vendedor_id = u.id
+       WHERE c.id = $1 AND c.company_id = $2`,
+      [id, decoded.company_id]
+    );
+
+    if (clienteCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    const cliente = clienteCheck.rows[0];
+    if (role === 'vendedor' && cliente.vendedor_id !== userId) {
+      return res.status(403).json({ error: 'Sem permissão para alterar este cliente' });
+    }
+    if (role === 'gerente' && equipe_id && cliente.vendedor_equipe_id !== equipe_id) {
+      return res.status(403).json({ error: 'Sem permissão para alterar este cliente' });
+    }
 
     const result = await pool.query(
       `UPDATE clientes SET etapa = $1, updated_at = NOW()
@@ -807,10 +888,6 @@ app.patch('/api/clientes/:id/etapa', async (req, res) => {
       [etapa, id, decoded.company_id]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
-    }
-
     res.json({ data: { cliente: result.rows[0] } });
   } catch (error) {
     console.error('Erro ao atualizar etapa:', error);
@@ -818,8 +895,48 @@ app.patch('/api/clientes/:id/etapa', async (req, res) => {
   }
 });
 
-app.delete('/api/clientes/:id', (_req, res) => {
-  res.json({ message: 'Cliente deletado' });
+app.delete('/api/clientes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { role, id: userId, equipe_id } = decoded;
+
+    // SEGURANÇA: Verificar permissão antes de deletar
+    const clienteCheck = await pool.query(
+      `SELECT c.vendedor_id, u.equipe_id as vendedor_equipe_id
+       FROM clientes c
+       LEFT JOIN usuarios u ON c.vendedor_id = u.id
+       WHERE c.id = $1 AND c.company_id = $2`,
+      [id, decoded.company_id]
+    );
+
+    if (clienteCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    const cliente = clienteCheck.rows[0];
+    if (role === 'vendedor' && cliente.vendedor_id !== userId) {
+      return res.status(403).json({ error: 'Sem permissão para deletar este cliente' });
+    }
+    if (role === 'gerente' && equipe_id && cliente.vendedor_equipe_id !== equipe_id) {
+      return res.status(403).json({ error: 'Sem permissão para deletar este cliente' });
+    }
+
+    await pool.query(
+      'DELETE FROM clientes WHERE id = $1 AND company_id = $2',
+      [id, decoded.company_id]
+    );
+
+    res.json({ message: 'Cliente deletado com sucesso' });
+  } catch (error) {
+    console.error('Erro ao deletar cliente:', error);
+    res.status(500).json({ error: 'Erro ao deletar cliente' });
+  }
 });
 
 // ============================================
