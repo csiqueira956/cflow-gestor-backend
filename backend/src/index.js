@@ -18,6 +18,7 @@ import webhookRoutes from './routes/webhookRoutes.js';
 import adminAssinaturaRoutes from './routes/adminAssinaturaRoutes.js';
 import atividadeRoutes from './routes/atividadeRoutes.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
+import { authenticateToken } from './middleware/auth.js';
 
 // Configuração de variáveis de ambiente
 dotenv.config();
@@ -83,8 +84,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// Rota mockada de grupos (opcional)
-app.get('/api/grupos', (req, res) => {
+// Rota mockada de grupos (requer autenticação)
+app.get('/api/grupos', authenticateToken, (req, res) => {
   res.json({
     grupos: [
       { id: 1, administradora: 'Honda', grupo: 'H001', cotas_disponiveis: 25 },

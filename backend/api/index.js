@@ -526,16 +526,26 @@ app.get('/api/notifications/unread-count', (_req, res) => {
   res.json({ count: 0 });
 });
 
-// Rota mockada de grupos
-app.get('/api/grupos', (_req, res) => {
-  res.json({
-    grupos: [
-      { id: 1, administradora: 'Honda', grupo: 'H001', cotas_disponiveis: 25 },
-      { id: 2, administradora: 'Embracon', grupo: 'E001', cotas_disponiveis: 15 },
-      { id: 3, administradora: 'Porto Seguro', grupo: 'PS001', cotas_disponiveis: 30 },
-      { id: 4, administradora: 'Rodobens', grupo: 'R001', cotas_disponiveis: 20 }
-    ]
-  });
+// Rota mockada de grupos (requer autenticação)
+app.get('/api/grupos', (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+    jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    res.json({
+      grupos: [
+        { id: 1, administradora: 'Honda', grupo: 'H001', cotas_disponiveis: 25 },
+        { id: 2, administradora: 'Embracon', grupo: 'E001', cotas_disponiveis: 15 },
+        { id: 3, administradora: 'Porto Seguro', grupo: 'PS001', cotas_disponiveis: 30 },
+        { id: 4, administradora: 'Rodobens', grupo: 'R001', cotas_disponiveis: 20 }
+      ]
+    });
+  } catch (error) {
+    return res.status(401).json({ error: 'Token inválido' });
+  }
 });
 
 // ============================================

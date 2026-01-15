@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import Navbar from '../components/Navbar';
 import UsageIndicator from '../components/UsageIndicator';
 import { assinaturaAPI } from '../api/api';
@@ -91,7 +92,7 @@ const MinhaAssinatura = () => {
       }
     } catch (error) {
       console.error('Erro ao iniciar upgrade:', error);
-      alert(error.response?.data?.message || 'Erro ao iniciar upgrade de plano');
+      toast.error(error.response?.data?.message || 'Erro ao iniciar upgrade de plano');
     } finally {
       setChangingPlan(false);
     }
@@ -342,7 +343,7 @@ const MinhaAssinatura = () => {
                           <button
                             onClick={() => {
                               navigator.clipboard.writeText(payment.pix_copy_paste);
-                              alert('Código PIX copiado!');
+                              toast.success('Código PIX copiado!');
                             }}
                             className="text-blue-600 hover:text-blue-800"
                           >
@@ -549,7 +550,7 @@ const MinhaAssinatura = () => {
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(paymentData.payload);
-                          alert('Código PIX copiado!');
+                          toast.success('Código PIX copiado!');
                         }}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                       >

@@ -29,46 +29,50 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
 
   // Estado para gerenciar colunas customizadas
   const [colunas, setColunas] = useState(() => {
-    const savedColunas = localStorage.getItem('kanban_colunas');
+    try {
+      const savedColunas = localStorage.getItem('kanban_colunas');
 
-    if (savedColunas) {
-      const colunasParsed = JSON.parse(savedColunas);
+      if (savedColunas) {
+        const colunasParsed = JSON.parse(savedColunas);
 
-      // Verificar se a coluna "em_comissionamento" existe
-      const temEmComissionamento = colunasParsed.some(col => col.id === 'em_comissionamento');
+        // Verificar se a coluna "em_comissionamento" existe
+        const temEmComissionamento = colunasParsed.some(col => col.id === 'em_comissionamento');
 
-      if (!temEmComissionamento) {
-        // Adicionar a coluna "Em Comissionamento" após "Fechado"
-        const indexFechado = colunasParsed.findIndex(col => col.id === 'fechado');
-        const colunaEmComissionamento = {
-          id: 'em_comissionamento',
-          titulo: 'Em Comissionamento',
-          cor: 'bg-teal-500',
-          bloqueado: true
-        };
+        if (!temEmComissionamento) {
+          // Adicionar a coluna "Em Comissionamento" após "Fechado"
+          const indexFechado = colunasParsed.findIndex(col => col.id === 'fechado');
+          const colunaEmComissionamento = {
+            id: 'em_comissionamento',
+            titulo: 'Em Comissionamento',
+            cor: 'bg-teal-500',
+            bloqueado: true
+          };
 
-        if (indexFechado !== -1) {
-          // Inserir após "Fechado"
-          colunasParsed.splice(indexFechado + 1, 0, colunaEmComissionamento);
-        } else {
-          // Se não encontrou "Fechado", adicionar antes de "Perdido"
-          const indexPerdido = colunasParsed.findIndex(col => col.id === 'perdido');
-          if (indexPerdido !== -1) {
-            colunasParsed.splice(indexPerdido, 0, colunaEmComissionamento);
+          if (indexFechado !== -1) {
+            // Inserir após "Fechado"
+            colunasParsed.splice(indexFechado + 1, 0, colunaEmComissionamento);
           } else {
-            // Se não encontrou nem "Fechado" nem "Perdido", adicionar no final
-            colunasParsed.push(colunaEmComissionamento);
+            // Se não encontrou "Fechado", adicionar antes de "Perdido"
+            const indexPerdido = colunasParsed.findIndex(col => col.id === 'perdido');
+            if (indexPerdido !== -1) {
+              colunasParsed.splice(indexPerdido, 0, colunaEmComissionamento);
+            } else {
+              // Se não encontrou nem "Fechado" nem "Perdido", adicionar no final
+              colunasParsed.push(colunaEmComissionamento);
+            }
           }
+
+          // Atualizar localStorage com a nova configuração
+          localStorage.setItem('kanban_colunas', JSON.stringify(colunasParsed));
         }
 
-        // Atualizar localStorage com a nova configuração
-        localStorage.setItem('kanban_colunas', JSON.stringify(colunasParsed));
+        return colunasParsed;
       }
 
-      return colunasParsed;
+      return colunasIniciais;
+    } catch {
+      return colunasIniciais;
     }
-
-    return colunasIniciais;
   });
   const [mostrarNovaColuna, setMostrarNovaColuna] = useState(false);
   const [novaColuna, setNovaColuna] = useState({ titulo: '', cor: 'bg-indigo-500' });
@@ -281,6 +285,8 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
     try {
       await clientesAPI.deletar(clienteId);
       setClientes((prevClientes) => prevClientes.filter((c) => c.id !== clienteId));
+      setModalAberto(false);
+      setClienteSelecionado(null);
       toast.success('Cliente excluído com sucesso');
     } catch (error) {
       console.error('Erro ao excluir cliente:', error);

@@ -58,6 +58,8 @@ router.delete('/assinaturas/empresa/:companyId', authenticateToken, isSuperAdmin
 
 // Gerar cobrança via cartão de crédito
 router.post('/assinaturas/empresa/:companyId/gerar-cobranca-cartao', authenticateToken, isSuperAdmin, gerarCobrancaCartao);
+// Alias para compatibilidade com frontend
+router.post('/assinaturas/empresa/:companyId/gerar-cobranca', authenticateToken, isSuperAdmin, gerarCobrancaCartao);
 
 // Obter histórico de pagamentos de uma empresa
 router.get('/assinaturas/empresa/:companyId/pagamentos', authenticateToken, isSuperAdmin, getCompanyPagamentos);

@@ -378,6 +378,71 @@ export const getSummary = async (req, res) => {
   }
 };
 
+/**
+ * Buscar uso atual da assinatura (limites)
+ * GET /api/subscription/usage
+ */
+export const getUsage = async (req, res) => {
+  try {
+    const { companyId } = req;
+
+    // Buscar assinatura
+    const subscription = await Subscription.findActiveByCompanyId(companyId);
+
+    if (!subscription) {
+      return res.status(404).json({
+        error: 'Assinatura não encontrada'
+      });
+    }
+
+    // Buscar limites do plano
+    const plan = await Plan.findById(subscription.plan_id);
+
+    // Contar uso atual
+    const pool = (await import('../config/database.js')).default;
+
+    const [clientesResult] = await pool.query(
+      'SELECT COUNT(*) as count FROM clientes WHERE company_id = $1',
+      [companyId]
+    );
+
+    const [usuariosResult] = await pool.query(
+      'SELECT COUNT(*) as count FROM usuarios WHERE company_id = $1',
+      [companyId]
+    );
+
+    const clientesUsados = parseInt(clientesResult.rows[0]?.count || 0);
+    const usuariosUsados = parseInt(usuariosResult.rows[0]?.count || 0);
+
+    return res.json({
+      success: true,
+      data: {
+        clientes: {
+          usado: clientesUsados,
+          limite: plan?.max_leads || 100,
+          percentual: plan?.max_leads ? Math.round((clientesUsados / plan.max_leads) * 100) : 0
+        },
+        usuarios: {
+          usado: usuariosUsados,
+          limite: plan?.max_users || 5,
+          percentual: plan?.max_users ? Math.round((usuariosUsados / plan.max_users) * 100) : 0
+        },
+        plan: {
+          id: plan?.id,
+          name: plan?.name,
+          features: plan?.features || []
+        }
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar uso:', error);
+    return res.status(500).json({
+      error: 'Erro ao buscar uso',
+      message: error.message
+    });
+  }
+};
+
 export default {
   getMySubscription,
   createTrial,
@@ -386,5 +451,6 @@ export default {
   cancel,
   reactivate,
   getHistory,
-  getSummary
+  getSummary,
+  getUsage
 };

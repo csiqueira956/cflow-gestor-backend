@@ -64,7 +64,38 @@ const Signup = () => {
 
   const validateCNPJ = (cnpj) => {
     const cleaned = cnpj.replace(/\D/g, '');
-    return cleaned.length === 14;
+    if (cleaned.length !== 14) return false;
+
+    // Rejeitar CNPJs com todos os dígitos iguais
+    if (/^(\d)\1+$/.test(cleaned)) return false;
+
+    // Validação dos dígitos verificadores
+    let tamanho = cleaned.length - 2;
+    let numeros = cleaned.substring(0, tamanho);
+    const digitos = cleaned.substring(tamanho);
+    let soma = 0;
+    let pos = tamanho - 7;
+
+    for (let i = tamanho; i >= 1; i--) {
+      soma += numeros.charAt(tamanho - i) * pos--;
+      if (pos < 2) pos = 9;
+    }
+
+    let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+    if (resultado !== parseInt(digitos.charAt(0))) return false;
+
+    tamanho = tamanho + 1;
+    numeros = cleaned.substring(0, tamanho);
+    soma = 0;
+    pos = tamanho - 7;
+
+    for (let i = tamanho; i >= 1; i--) {
+      soma += numeros.charAt(tamanho - i) * pos--;
+      if (pos < 2) pos = 9;
+    }
+
+    resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+    return resultado === parseInt(digitos.charAt(1));
   };
 
   const validatePhone = (phone) => {
@@ -147,9 +178,40 @@ const Signup = () => {
     setErrors({});
   };
 
+  // Máscara de CNPJ: XX.XXX.XXX/XXXX-XX
+  const formatCNPJ = (value) => {
+    const cleaned = value.replace(/\D/g, '');
+    const match = cleaned.match(/^(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})$/);
+    if (!match) return cleaned;
+    return [match[1], match[2], match[3], match[4], match[5]]
+      .filter(Boolean)
+      .join('')
+      .replace(/(\d{2})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1/$2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  };
+
+  // Máscara de telefone: (XX) XXXXX-XXXX ou (XX) XXXX-XXXX
+  const formatPhone = (value) => {
+    const cleaned = value.replace(/\D/g, '');
+    if (cleaned.length <= 10) {
+      return cleaned.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').trim().replace(/-$/, '');
+    }
+    return cleaned.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').trim().replace(/-$/, '');
+  };
+
   const handleCompanyChange = (e) => {
     const { name, value } = e.target;
-    setCompanyData({ ...companyData, [name]: value });
+    let formattedValue = value;
+
+    if (name === 'cnpj') {
+      formattedValue = formatCNPJ(value);
+    } else if (name === 'telefone') {
+      formattedValue = formatPhone(value);
+    }
+
+    setCompanyData({ ...companyData, [name]: formattedValue });
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });
     }
@@ -157,7 +219,13 @@ const Signup = () => {
 
   const handleUserChange = (e) => {
     const { name, value } = e.target;
-    setUserData({ ...userData, [name]: value });
+    let formattedValue = value;
+
+    if (name === 'celular') {
+      formattedValue = formatPhone(value);
+    }
+
+    setUserData({ ...userData, [name]: formattedValue });
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });
     }
@@ -207,6 +275,7 @@ const Signup = () => {
       } catch (trialError) {
         console.error('Erro ao criar trial:', trialError);
         toast.success('Conta criada com sucesso!');
+        toast.error('Não foi possível iniciar o trial. Entre em contato com o suporte.', { duration: 5000 });
       }
 
       // 4. Redirect to dashboard

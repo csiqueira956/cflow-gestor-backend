@@ -1,6 +1,23 @@
 import { Draggable } from '@hello-pangea/dnd';
 
+// Mapa de cores Tailwind para valores CSS
+const coresMap = {
+  'bg-blue-500': '#3b82f6',
+  'bg-purple-500': '#a855f7',
+  'bg-yellow-500': '#eab308',
+  'bg-green-500': '#22c55e',
+  'bg-teal-500': '#14b8a6',
+  'bg-gray-500': '#6b7280',
+  'bg-red-500': '#ef4444',
+  'bg-indigo-500': '#6366f1',
+  'bg-pink-500': '#ec4899',
+  'bg-orange-500': '#f97316',
+};
+
 const ClienteCard = ({ cliente, index, cor, onClickDetalhes }) => {
+  // Obter cor CSS a partir da classe Tailwind
+  const corCSS = coresMap[cor] || '#667eea';
+
   // Formatar CPF
   const formatarCPF = (cpf) => {
     if (!cpf) return '';
@@ -10,6 +27,12 @@ const ClienteCard = ({ cliente, index, cor, onClickDetalhes }) => {
   // Formatar telefone
   const formatarTelefone = (telefone) => {
     if (!telefone) return '';
+    const numeros = telefone.replace(/\D/g, '');
+    if (numeros.length === 11) {
+      return numeros.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    } else if (numeros.length === 10) {
+      return numeros.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    }
     return telefone;
   };
 
@@ -40,7 +63,7 @@ const ClienteCard = ({ cliente, index, cor, onClickDetalhes }) => {
             snapshot.isDragging ? 'shadow-xl rotate-2 scale-105' : 'hover:shadow-lg'
           }`}
           style={{
-            borderLeftColor: cor?.replace('bg-', '') || '#667eea',
+            borderLeftColor: corCSS,
             ...provided.draggableProps.style,
           }}
         >

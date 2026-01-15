@@ -7,7 +7,8 @@ import {
   cancel,
   reactivate,
   getHistory,
-  getSummary
+  getSummary,
+  getUsage
 } from '../controllers/subscriptionController.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { tenantMiddleware } from '../middleware/tenantMiddleware.js';
@@ -22,6 +23,7 @@ router.use(tenantMiddleware);
 router.get('/', getMySubscription); // Buscar assinatura ativa
 router.get('/summary', getSummary); // Resumo da assinatura (dashboard)
 router.get('/history', getHistory); // Histórico de mudanças
+router.get('/usage', getUsage); // Uso atual (limites)
 
 router.post('/trial', createTrial); // Criar trial gratuito
 router.post('/upgrade', upgrade); // Fazer upgrade

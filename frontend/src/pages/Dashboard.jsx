@@ -193,8 +193,12 @@ const Dashboard = () => {
       setIsExpanded(saved !== null ? JSON.parse(saved) : true);
     };
 
-    const interval = setInterval(handleStorageChange, 100);
-    return () => clearInterval(interval);
+    window.addEventListener('storage', handleStorageChange);
+    const interval = setInterval(handleStorageChange, 500);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
   }, []);
 
   // Fechar notificações ao clicar fora
@@ -800,7 +804,7 @@ const Dashboard = () => {
                           equipe.percentual_atingido >= 50 ? 'text-yellow-600' :
                           'text-red-600'
                         }`}>
-                          {equipe.percentual_atingido}%
+                          {Number(equipe.percentual_atingido || 0).toFixed(1)}%
                         </span>
                       </div>
 
@@ -826,7 +830,7 @@ const Dashboard = () => {
                         <div className="flex justify-between text-sm pt-2 border-t">
                           <span className="text-gray-500 text-xs">Contribuição:</span>
                           <span className="text-xs font-medium text-gray-600">
-                            {equipe.percentual_contribuicao}% do total
+                            {Number(equipe.percentual_contribuicao || 0).toFixed(1)}% do total
                           </span>
                         </div>
                       </div>

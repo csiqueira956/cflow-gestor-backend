@@ -512,21 +512,6 @@ const Login = () => {
           </button>
         </form>
 
-        {/* Informações de teste */}
-        {!modoRegistro && (
-          <div className="mt-8 p-4 bg-primary-50 border border-primary-100 rounded-lg">
-            <p className="text-xs text-primary-800 text-center mb-2 font-semibold">
-              Credenciais de teste:
-            </p>
-            <p className="text-xs text-primary-700 text-center">
-              <strong>Admin:</strong> admin@gestorconsorcios.com / admin123
-            </p>
-            <p className="text-xs text-primary-700 text-center">
-              <strong>Vendedor:</strong> vendedor@gestorconsorcios.com / vendedor123
-            </p>
-          </div>
-        )}
-
         {/* Link para cadastro */}
         {!modoRegistro && (
           <div className="mt-6 text-center">
