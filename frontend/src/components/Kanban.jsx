@@ -839,7 +839,6 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
                                     index={index}
                                     cor={coluna.cor}
                                     onClickDetalhes={() => abrirModalCliente(cliente)}
-                                    onDelete={excluirCliente}
                                   />
                                 ))}
                                 {provided.placeholder}
@@ -1022,6 +1021,7 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
           cliente={clienteSelecionado}
           onClose={fecharModal}
           onAtualizar={carregarClientes}
+          onDelete={excluirCliente}
         />
       )}
 
