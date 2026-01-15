@@ -292,7 +292,12 @@ const Perfil = () => {
                 </label>
                 <input
                   type="text"
-                  value={usuario?.role === 'admin' ? 'Administrador' : 'Vendedor'}
+                  value={
+                    usuario?.role === 'super_admin' ? 'Super Admin' :
+                    usuario?.role === 'admin' ? 'Administrador' :
+                    usuario?.role === 'gerente' ? 'Gerente' :
+                    'Vendedor'
+                  }
                   className="input-field bg-gray-50 cursor-not-allowed capitalize"
                   disabled
                 />
