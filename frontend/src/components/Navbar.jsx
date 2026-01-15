@@ -336,7 +336,7 @@ const Navbar = () => {
                   onClick={() => setSuperAdminOpen(!superAdminOpen)}
                   className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
                     isSuperAdminPath()
-                      ? 'bg-red-50 text-red-600 font-semibold'
+                      ? 'bg-blue-50 text-blue-600 font-semibold'
                       : 'text-gray-700 hover:bg-gray-100'
                   } ${!isExpanded && 'justify-center'}`}
                   title={!isExpanded ? 'Super Admin' : ''}
@@ -376,7 +376,7 @@ const Navbar = () => {
                         }}
                         className={`w-full flex items-center gap-3 pl-12 pr-3 py-2 rounded-lg transition-all text-sm text-left ${
                           isSuperAdminPath()
-                            ? 'text-red-600 hover:bg-red-50'
+                            ? 'text-blue-600 hover:bg-blue-50'
                             : 'text-gray-600 hover:bg-gray-100'
                         }`}
                       >
