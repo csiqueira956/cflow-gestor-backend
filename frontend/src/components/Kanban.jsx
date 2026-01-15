@@ -276,6 +276,18 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
     setModalAberto(true);
   };
 
+  // Excluir cliente
+  const excluirCliente = async (clienteId) => {
+    try {
+      await clientesAPI.deletar(clienteId);
+      setClientes((prevClientes) => prevClientes.filter((c) => c.id !== clienteId));
+      toast.success('Cliente excluído com sucesso');
+    } catch (error) {
+      console.error('Erro ao excluir cliente:', error);
+      toast.error('Erro ao excluir cliente');
+    }
+  };
+
   const fecharModal = () => {
     setModalAberto(false);
     setClienteSelecionado(null);
@@ -827,6 +839,7 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
                                     index={index}
                                     cor={coluna.cor}
                                     onClickDetalhes={() => abrirModalCliente(cliente)}
+                                    onDelete={excluirCliente}
                                   />
                                 ))}
                                 {provided.placeholder}
