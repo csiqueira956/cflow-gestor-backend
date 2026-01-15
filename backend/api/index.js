@@ -2540,7 +2540,7 @@ app.get('/api/admin/empresas/:companyId/usuarios', verifySuperAdmin, async (req,
     const { companyId } = req.params;
 
     const result = await pool.query(`
-      SELECT id, nome, email, role, created_at, ultimo_acesso
+      SELECT id, nome, email, role, created_at
       FROM usuarios
       WHERE company_id = $1
       ORDER BY created_at DESC
