@@ -38,6 +38,13 @@ const SuperAdminPanel = () => {
     nome: '',
   });
   const [processando, setProcessando] = useState(false);
+  const [showNovoUsuarioForm, setShowNovoUsuarioForm] = useState(false);
+  const [novoUsuarioForm, setNovoUsuarioForm] = useState({
+    nome: '',
+    email: '',
+    senha: '',
+    role: 'vendedor',
+  });
 
   // Form states
   const [novaEmpresaForm, setNovaEmpresaForm] = useState({
@@ -295,6 +302,26 @@ const SuperAdminPanel = () => {
       id: usuario.id,
       nome: usuario.nome,
     });
+  };
+
+  const handleCriarUsuario = async (e) => {
+    e.preventDefault();
+    if (!novoUsuarioForm.nome || !novoUsuarioForm.email || !novoUsuarioForm.senha) {
+      toast.error('Preencha todos os campos obrigatórios');
+      return;
+    }
+    setProcessando(true);
+    try {
+      await superAdminAPI.criarUsuarioEmpresa(empresaSelecionada.id, novoUsuarioForm);
+      toast.success('Usuário criado com sucesso!');
+      setNovoUsuarioForm({ nome: '', email: '', senha: '', role: 'vendedor' });
+      setShowNovoUsuarioForm(false);
+      handleVerUsuarios(empresaSelecionada);
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao criar usuário');
+    } finally {
+      setProcessando(false);
+    }
   };
 
   // === Assinatura Recorrente ===
@@ -1315,8 +1342,92 @@ const SuperAdminPanel = () => {
       {showUsuariosModal && empresaSelecionada && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Usuários da Empresa</h2>
-            <p className="text-gray-500 mb-6">Empresa: {empresaSelecionada.nome}</p>
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Usuários da Empresa</h2>
+                <p className="text-gray-500">Empresa: {empresaSelecionada.nome}</p>
+              </div>
+              <button
+                onClick={() => setShowNovoUsuarioForm(!showNovoUsuarioForm)}
+                className="btn-primary flex items-center gap-2 text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Novo Usuário
+              </button>
+            </div>
+
+            {/* Formulário de Novo Usuário */}
+            {showNovoUsuarioForm && (
+              <form onSubmit={handleCriarUsuario} className="mb-6 p-4 bg-gray-50 rounded-lg border">
+                <h3 className="font-medium text-gray-900 mb-3">Criar Novo Usuário</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
+                    <input
+                      type="text"
+                      value={novoUsuarioForm.nome}
+                      onChange={(e) => setNovoUsuarioForm({ ...novoUsuarioForm, nome: e.target.value })}
+                      className="input-field"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                    <input
+                      type="email"
+                      value={novoUsuarioForm.email}
+                      onChange={(e) => setNovoUsuarioForm({ ...novoUsuarioForm, email: e.target.value })}
+                      className="input-field"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Senha *</label>
+                    <input
+                      type="password"
+                      value={novoUsuarioForm.senha}
+                      onChange={(e) => setNovoUsuarioForm({ ...novoUsuarioForm, senha: e.target.value })}
+                      className="input-field"
+                      minLength={6}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>
+                    <select
+                      value={novoUsuarioForm.role}
+                      onChange={(e) => setNovoUsuarioForm({ ...novoUsuarioForm, role: e.target.value })}
+                      className="input-field"
+                    >
+                      <option value="vendedor">Vendedor</option>
+                      <option value="gerente">Gerente</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNovoUsuarioForm(false);
+                      setNovoUsuarioForm({ nome: '', email: '', senha: '', role: 'vendedor' });
+                    }}
+                    className="btn-secondary text-sm"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary text-sm"
+                    disabled={processando}
+                  >
+                    {processando ? 'Criando...' : 'Criar Usuário'}
+                  </button>
+                </div>
+              </form>
+            )}
 
             {usuariosEmpresa.length > 0 ? (
               <table className="w-full">
@@ -1371,7 +1482,10 @@ const SuperAdminPanel = () => {
 
             <div className="flex justify-end mt-6">
               <button
-                onClick={() => setShowUsuariosModal(false)}
+                onClick={() => {
+                  setShowUsuariosModal(false);
+                  setShowNovoUsuarioForm(false);
+                }}
                 className="btn-secondary"
               >
                 Fechar
