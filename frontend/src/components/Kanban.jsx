@@ -544,98 +544,89 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
   }
 
   return (
-    <div className="p-4">
-      {/* Botões de ação */}
-      <div className="mb-4 flex justify-end gap-2">
-        {isAdmin() && (
-          <button
-            onClick={exportarParaCSV}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-2"
-            title="Exportar dados filtrados para CSV"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Exportar CSV
-          </button>
-        )}
-        <button
-          onClick={() => setMostrarNovaColuna(!mostrarNovaColuna)}
-          className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nova Etapa
-        </button>
-        <button
-          onClick={abrirModalCadastro}
-          className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Novo Cliente
-        </button>
-      </div>
-
-      {/* Barra de Busca e Filtros */}
-      <div className="mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Campo de busca */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <input
-              type="text"
-              value={termoBusca}
-              onChange={(e) => setTermoBusca(e.target.value)}
-              placeholder="Buscar por nome, CPF, email ou telefone..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-            />
-            {termoBusca && (
-              <button
-                onClick={() => setTermoBusca('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center"
-              >
-                <svg className="w-5 h-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    <div className="space-y-4">
+      {/* Caixa 1: Filtros e Botões */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          {/* Filtros */}
+          <div className="flex flex-col md:flex-row gap-3 flex-1">
+            {/* Campo de busca */}
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
+              </div>
+              <input
+                type="text"
+                value={termoBusca}
+                onChange={(e) => setTermoBusca(e.target.value)}
+                placeholder="Buscar por nome, CPF, email ou telefone..."
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+              {termoBusca && (
+                <button
+                  onClick={() => setTermoBusca('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  <svg className="w-4 h-4 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* Filtro de etapa */}
+            <div className="relative md:w-48">
+              <select
+                value={filtroEtapa}
+                onChange={(e) => setFiltroEtapa(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 appearance-none bg-white"
+              >
+                <option value="todas">Todas as Etapas</option>
+                {colunas.map((coluna) => (
+                  <option key={coluna.id} value={coluna.id}>
+                    {coluna.titulo}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Botões */}
+          <div className="flex gap-2">
+            {isAdmin() && (
+              <button
+                onClick={exportarParaCSV}
+                className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-1"
+                title="Exportar CSV"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="hidden sm:inline">Exportar</span>
               </button>
             )}
-          </div>
-
-          {/* Filtro de etapa */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-            </div>
-            <select
-              value={filtroEtapa}
-              onChange={(e) => setFiltroEtapa(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none bg-white"
+            <button
+              onClick={() => setMostrarNovaColuna(!mostrarNovaColuna)}
+              className="bg-primary-500 hover:bg-primary-600 text-white px-3 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-1"
             >
-              <option value="todas">Todas as Etapas</option>
-              {colunas.map((coluna) => (
-                <option key={coluna.id} value={coluna.id}>
-                  {coluna.titulo}
-                </option>
-              ))}
-            </select>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="hidden sm:inline">Nova Etapa</span>
+            </button>
+            <button
+              onClick={abrirModalCadastro}
+              className="bg-primary-500 hover:bg-primary-600 text-white px-3 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="hidden sm:inline">Novo Cliente</span>
+            </button>
           </div>
         </div>
-      </div>
-
-      {/* Estatísticas */}
-      <div className="mb-4">
-        <p className="text-sm text-gray-500">
-          Total de <span className="font-semibold text-gray-700">{clientesFiltrados.length}</span> clientes {termoBusca || filtroEtapa !== 'todas' ? 'encontrados' : 'distribuídos em ' + colunas.length + ' etapas'}
-        </p>
       </div>
 
       {/* Formulário para adicionar nova coluna */}
@@ -693,16 +684,24 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
         </div>
       )}
 
-      {/* Kanban Board */}
-      <DragDropContext onDragEnd={onDragEnd}>
-        <Droppable droppableId="all-columns" direction="horizontal" type="column">
-          {(provided) => (
-            <div
-              ref={provided.innerRef}
-              {...provided.droppableProps}
-              className="grid grid-cols-1 gap-4 overflow-x-auto"
-            >
-              <div className="flex gap-0 pb-4" style={{ minWidth: `${colunas.length * 320}px` }}>
+      {/* Caixa 2: CRM / Kanban Board */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        {/* Header do CRM */}
+        <div className="mb-4 pb-3 border-b border-gray-200">
+          <p className="text-sm text-gray-600">
+            Total de <span className="font-semibold text-primary-600">{clientesFiltrados.length}</span> clientes {termoBusca || filtroEtapa !== 'todas' ? 'encontrados' : 'distribuídos em ' + colunas.length + ' etapas'}
+          </p>
+        </div>
+
+        <DragDropContext onDragEnd={onDragEnd}>
+          <Droppable droppableId="all-columns" direction="horizontal" type="column">
+            {(provided) => (
+              <div
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+                className="overflow-x-auto"
+              >
+                <div className="flex gap-0 pb-4" style={{ minWidth: `${colunas.length * 320}px` }}>
                 {colunas.map((coluna, index) => {
                   const clientesDaColuna = clientesPorEtapa(coluna.id);
                   const estaEditando = colunaEditando === coluna.id;
@@ -852,7 +851,8 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
             </div>
           )}
         </Droppable>
-      </DragDropContext>
+        </DragDropContext>
+      </div>
 
       {/* Modal de Cadastro Rápido */}
       {modalCadastroAberto && (
