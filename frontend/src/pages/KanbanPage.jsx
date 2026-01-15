@@ -49,9 +49,7 @@ const KanbanPage = () => {
         </div>
 
         {/* Kanban */}
-        <div className="card">
-          <Kanban clienteIdParaAbrir={clienteIdParaAbrir} onClienteAberto={() => setClienteIdParaAbrir(null)} />
-        </div>
+        <Kanban clienteIdParaAbrir={clienteIdParaAbrir} onClienteAberto={() => setClienteIdParaAbrir(null)} />
       </div>
     </div>
   );
