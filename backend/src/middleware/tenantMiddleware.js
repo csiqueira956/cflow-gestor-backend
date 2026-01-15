@@ -105,6 +105,11 @@ export const addTenantFilter = (query, companyId, paramIndex = 1) => {
 export const checkPlanLimits = (limitType) => {
   return async (req, res, next) => {
     try {
+      // Bypass para super_admin - NUNCA bloquear acesso
+      if (req.user?.role === 'super_admin' || req.usuario?.role === 'super_admin') {
+        return next();
+      }
+
       const { companyId } = req;
 
       // Buscar empresa com limites atuais

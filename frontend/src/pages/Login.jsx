@@ -257,7 +257,14 @@ const Login = () => {
           }
 
           toast.success('Login realizado com sucesso!');
-          navigate('/dashboard');
+
+          // Verificar role do usuário para redirecionamento correto
+          const usuarioLogado = JSON.parse(localStorage.getItem('usuario'));
+          if (usuarioLogado?.role === 'super_admin') {
+            navigate('/super-admin');
+          } else {
+            navigate('/dashboard');
+          }
         } else {
           toast.error(result.error);
           setErro(result.error);
