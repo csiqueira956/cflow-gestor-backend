@@ -69,7 +69,6 @@ app.get('/api/plans', async (_req, res) => {
       data: result.rows
     });
   } catch (error) {
-    console.error('Erro ao listar planos:', error);
     res.status(500).json({
       error: 'Erro ao listar planos',
       message: error.message
@@ -89,7 +88,6 @@ app.get('/api/webhooks/health', (_req, res) => {
 // Login
 app.post('/api/auth/login', async (req, res) => {
   try {
-    console.log('📥 Tentativa de login:', req.body.email);
     const { email, senha } = req.body;
 
     if (!email || !senha) {
@@ -103,7 +101,6 @@ app.post('/api/auth/login', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      console.log('❌ Usuário não encontrado');
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
@@ -112,7 +109,6 @@ app.post('/api/auth/login', async (req, res) => {
     // Verificar senha
     const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
     if (!senhaValida) {
-      console.log('❌ Senha inválida');
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
@@ -128,7 +124,32 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    console.log('✅ Login bem-sucedido:', usuario.nome);
+    // Registrar sessão de login
+    const ipAddress = req.headers['x-forwarded-for'] || req.ip || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    try {
+      // Atualizar last_login e last_activity no usuário
+      await pool.query(
+        'UPDATE usuarios SET last_login = NOW(), last_activity = NOW() WHERE id = $1',
+        [usuario.id]
+      );
+
+      // Desativar sessões anteriores
+      await pool.query(
+        'UPDATE user_sessions SET is_active = false, logout_at = NOW() WHERE user_id = $1 AND is_active = true',
+        [usuario.id]
+      );
+
+      // Criar nova sessão
+      await pool.query(
+        `INSERT INTO user_sessions (user_id, company_id, login_at, last_activity, ip_address, user_agent, is_active)
+         VALUES ($1, $2, NOW(), NOW(), $3, $4, true)`,
+        [usuario.id, usuario.company_id, ipAddress, userAgent]
+      );
+    } catch {
+      // Erro no registro de sessão não deve bloquear o login
+    }
 
     res.json({
       message: 'Login realizado com sucesso',
@@ -143,7 +164,6 @@ app.post('/api/auth/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erro no login:', error);
     res.status(500).json({ error: 'Erro ao realizar login', message: error.message });
   }
 });
@@ -191,7 +211,6 @@ app.get('/api/auth/me', async (req, res) => {
 
     res.json(usuario);
   } catch (error) {
-    console.error('❌ Erro ao verificar token:', error);
     res.status(401).json({ error: 'Token inválido ou expirado' });
   }
 });
@@ -280,7 +299,6 @@ app.post('/api/auth/register', async (req, res) => {
         { expiresIn: '7d' }
       );
 
-      console.log('✅ Usuário criado com sucesso:', usuario.email);
 
       res.status(201).json({
         message: 'Usuário criado com sucesso',
@@ -298,7 +316,6 @@ app.post('/api/auth/register', async (req, res) => {
       throw error;
     }
   } catch (error) {
-    console.error('❌ Erro no registro:', error);
     res.status(500).json({ error: 'Erro ao registrar usuário', message: error.message });
   }
 });
@@ -328,7 +345,6 @@ app.get('/api/dashboard/estatisticas', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erro ao buscar estatísticas:', error);
     res.status(500).json({ error: 'Erro ao buscar estatísticas' });
   }
 });
@@ -349,7 +365,6 @@ app.get('/api/clientes/estatisticas', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erro ao buscar estatísticas de clientes:', error);
     res.status(500).json({ error: 'Erro ao buscar estatísticas' });
   }
 });
@@ -392,7 +407,6 @@ app.get('/api/subscription/summary', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erro ao buscar assinatura:', error);
     res.status(500).json({ error: 'Erro ao buscar assinatura' });
   }
 });
@@ -460,7 +474,6 @@ app.get('/api/subscription/usage', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erro ao buscar uso:', error);
     res.status(500).json({ error: 'Erro ao buscar estatísticas de uso' });
   }
 });
@@ -512,7 +525,6 @@ app.post('/api/subscription/trial', async (req, res) => {
       subscription_id: result.rows[0].id
     });
   } catch (error) {
-    console.error('Erro ao criar trial:', error);
     res.status(500).json({ error: 'Erro ao criar trial' });
   }
 });
@@ -558,7 +570,6 @@ app.post('/api/clientes/publico/:linkPublico', async (req, res) => {
     const { linkPublico } = req.params;
     const clienteData = req.body;
 
-    console.log('📥 Cadastro público recebido para link:', linkPublico);
 
     // Buscar vendedor pelo link público
     const vendedorResult = await pool.query(
@@ -591,7 +602,6 @@ app.post('/api/clientes/publico/:linkPublico', async (req, res) => {
       ]
     );
 
-    console.log('✅ Cliente cadastrado via link público:', result.rows[0]);
 
     res.status(201).json({
       success: true,
@@ -602,7 +612,6 @@ app.post('/api/clientes/publico/:linkPublico', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erro ao cadastrar cliente público:', error);
     res.status(500).json({ error: 'Erro ao processar cadastro' });
   }
 });
@@ -650,7 +659,6 @@ app.get('/api/clientes', async (req, res) => {
 
     res.json({ data: { clientes: result.rows } });
   } catch (error) {
-    console.error('Erro ao listar clientes:', error);
     res.status(500).json({ error: 'Erro ao listar clientes' });
   }
 });
@@ -691,7 +699,6 @@ app.get('/api/clientes/:id', async (req, res) => {
 
     res.json({ data: { cliente } });
   } catch (error) {
-    console.error('Erro ao buscar cliente:', error);
     res.status(500).json({ error: 'Erro ao buscar cliente' });
   }
 });
@@ -726,7 +733,6 @@ app.post('/api/clientes', async (req, res) => {
 
     res.status(201).json({ data: { cliente: result.rows[0] } });
   } catch (error) {
-    console.error('Erro ao criar cliente:', error);
     res.status(500).json({ error: 'Erro ao criar cliente' });
   }
 });
@@ -853,7 +859,6 @@ app.put('/api/clientes/:id', async (req, res) => {
 
     res.json({ data: { cliente: result.rows[0] } });
   } catch (error) {
-    console.error('Erro ao atualizar cliente:', error);
     res.status(500).json({ error: 'Erro ao atualizar cliente' });
   }
 });
@@ -900,7 +905,6 @@ app.patch('/api/clientes/:id/etapa', async (req, res) => {
 
     res.json({ data: { cliente: result.rows[0] } });
   } catch (error) {
-    console.error('Erro ao atualizar etapa:', error);
     res.status(500).json({ error: 'Erro ao atualizar etapa' });
   }
 });
@@ -944,7 +948,6 @@ app.delete('/api/clientes/:id', async (req, res) => {
 
     res.json({ message: 'Cliente deletado com sucesso' });
   } catch (error) {
-    console.error('Erro ao deletar cliente:', error);
     res.status(500).json({ error: 'Erro ao deletar cliente' });
   }
 });
@@ -979,7 +982,6 @@ app.get('/api/atividades/cliente/:clienteId', async (req, res) => {
       data: result.rows
     });
   } catch (error) {
-    console.error('Erro ao listar atividades:', error);
     res.status(500).json({ error: 'Erro ao listar atividades', message: error.message });
   }
 });
@@ -1038,7 +1040,6 @@ app.post('/api/atividades/cliente/:clienteId', async (req, res) => {
       data: result.rows[0]
     });
   } catch (error) {
-    console.error('Erro ao criar atividade:', error);
     res.status(500).json({ error: 'Erro ao criar atividade', message: error.message });
   }
 });
@@ -1078,7 +1079,6 @@ app.put('/api/atividades/:id', async (req, res) => {
       data: result.rows[0]
     });
   } catch (error) {
-    console.error('Erro ao atualizar atividade:', error);
     res.status(500).json({ error: 'Erro ao atualizar atividade', message: error.message });
   }
 });
@@ -1105,7 +1105,6 @@ app.delete('/api/atividades/:id', async (req, res) => {
 
     res.json({ success: true, message: 'Atividade excluída com sucesso' });
   } catch (error) {
-    console.error('Erro ao deletar atividade:', error);
     res.status(500).json({ error: 'Erro ao deletar atividade', message: error.message });
   }
 });
@@ -1140,7 +1139,6 @@ app.get('/api/atividades/followups/proximos', async (req, res) => {
 
     res.json({ success: true, data: result.rows });
   } catch (error) {
-    console.error('Erro ao listar próximos follow-ups:', error);
     res.status(500).json({ error: 'Erro ao listar próximos follow-ups', message: error.message });
   }
 });
@@ -1173,7 +1171,6 @@ app.get('/api/atividades/followups/atrasados', async (req, res) => {
 
     res.json({ success: true, data: result.rows });
   } catch (error) {
-    console.error('Erro ao listar follow-ups atrasados:', error);
     res.status(500).json({ error: 'Erro ao listar follow-ups atrasados', message: error.message });
   }
 });
@@ -1246,7 +1243,6 @@ app.get('/api/comissoes', async (req, res) => {
 
     res.json({ data: { comissoes: result.rows } });
   } catch (error) {
-    console.error('Erro ao listar comissões:', error);
     res.status(500).json({ error: 'Erro ao listar comissões' });
   }
 });
@@ -1274,7 +1270,6 @@ app.get('/api/comissoes/estatisticas', async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (error) {
-    console.error('Erro ao buscar estatísticas:', error);
     res.status(500).json({ error: 'Erro ao buscar estatísticas' });
   }
 });
@@ -1328,7 +1323,6 @@ app.get('/api/comissoes/:id', async (req, res) => {
 
     res.json({ data: { comissao } });
   } catch (error) {
-    console.error('Erro ao buscar comissão:', error);
     res.status(500).json({ error: 'Erro ao buscar comissão' });
   }
 });
@@ -1408,7 +1402,6 @@ app.post('/api/comissoes', async (req, res) => {
       data: { comissao }
     });
   } catch (error) {
-    console.error('Erro ao criar comissão:', error);
     res.status(500).json({ error: 'Erro ao criar comissão' });
   }
 });
@@ -1498,7 +1491,6 @@ app.put('/api/comissoes/:id', async (req, res) => {
       data: { comissao: updatedComissao }
     });
   } catch (error) {
-    console.error('Erro ao atualizar comissão:', error);
     res.status(500).json({ error: 'Erro ao atualizar comissão' });
   }
 });
@@ -1556,7 +1548,6 @@ app.put('/api/comissoes/parcelas/:id', async (req, res) => {
       parcela: updateResult.rows[0]
     });
   } catch (error) {
-    console.error('Erro ao atualizar parcela:', error);
     res.status(500).json({ error: 'Erro ao atualizar parcela' });
   }
 });
@@ -1595,7 +1586,6 @@ app.delete('/api/comissoes/:id', async (req, res) => {
 
     res.json({ message: 'Comissão deletada com sucesso' });
   } catch (error) {
-    console.error('Erro ao deletar comissão:', error);
     res.status(500).json({ error: 'Erro ao deletar comissão' });
   }
 });
@@ -1622,7 +1612,6 @@ app.get('/api/usuarios', async (req, res) => {
 
     res.json(result.rows);
   } catch (error) {
-    console.error('Erro ao listar usuários:', error);
     res.status(500).json({ error: 'Erro ao listar usuários' });
   }
 });
@@ -1663,7 +1652,6 @@ app.get('/api/usuarios/vendedores', async (req, res) => {
 
     res.json({ data: { vendedores: result.rows } });
   } catch (error) {
-    console.error('Erro ao listar vendedores:', error);
     res.status(500).json({ error: 'Erro ao listar vendedores' });
   }
 });
@@ -1698,7 +1686,6 @@ app.get('/api/equipes', async (req, res) => {
     );
     res.json({ data: { equipes: result.rows } });
   } catch (error) {
-    console.error('Erro ao listar equipes:', error);
     res.status(500).json({ error: 'Erro ao listar equipes' });
   }
 });
@@ -1724,7 +1711,6 @@ app.post('/api/equipes', async (req, res) => {
 
     res.status(201).json({ message: 'Equipe criada', equipe: result.rows[0] });
   } catch (error) {
-    console.error('Erro ao criar equipe:', error);
     res.status(500).json({ error: 'Erro ao criar equipe' });
   }
 });
@@ -1751,7 +1737,6 @@ app.put('/api/equipes/:id', async (req, res) => {
 
     res.json({ message: 'Equipe atualizada', equipe: result.rows[0] });
   } catch (error) {
-    console.error('Erro ao atualizar equipe:', error);
     res.status(500).json({ error: 'Erro ao atualizar equipe' });
   }
 });
@@ -1777,7 +1762,6 @@ app.delete('/api/equipes/:id', async (req, res) => {
 
     res.json({ message: 'Equipe deletada' });
   } catch (error) {
-    console.error('Erro ao deletar equipe:', error);
     res.status(500).json({ error: 'Erro ao deletar equipe' });
   }
 });
@@ -1812,7 +1796,6 @@ app.get('/api/administradoras', async (req, res) => {
     );
     res.json({ data: { administradoras: result.rows } });
   } catch (error) {
-    console.error('Erro ao listar administradoras:', error);
     res.status(500).json({ error: 'Erro ao listar administradoras' });
   }
 });
@@ -1839,7 +1822,6 @@ app.post('/api/administradoras', async (req, res) => {
 
     res.status(201).json({ message: 'Administradora criada', administradora: result.rows[0] });
   } catch (error) {
-    console.error('Erro ao criar administradora:', error);
     res.status(500).json({ error: 'Erro ao criar administradora' });
   }
 });
@@ -1868,7 +1850,6 @@ app.put('/api/administradoras/:id', async (req, res) => {
 
     res.json({ message: 'Administradora atualizada', administradora: result.rows[0] });
   } catch (error) {
-    console.error('Erro ao atualizar administradora:', error);
     res.status(500).json({ error: 'Erro ao atualizar administradora' });
   }
 });
@@ -1894,7 +1875,6 @@ app.delete('/api/administradoras/:id', async (req, res) => {
 
     res.json({ message: 'Administradora deletada' });
   } catch (error) {
-    console.error('Erro ao deletar administradora:', error);
     res.status(500).json({ error: 'Erro ao deletar administradora' });
   }
 });
@@ -1971,7 +1951,6 @@ app.get('/api/admin/assinaturas/todas', verifySuperAdmin, async (req, res) => {
 
     res.json({ empresas: result.rows });
   } catch (error) {
-    console.error('Erro ao listar empresas:', error);
     res.status(500).json({ error: 'Erro ao listar empresas' });
   }
 });
@@ -1989,7 +1968,6 @@ app.get('/api/admin/assinaturas/planos', verifySuperAdmin, async (req, res) => {
 
     res.json({ planos: result.rows });
   } catch (error) {
-    console.error('Erro ao listar planos:', error);
     res.status(500).json({ error: 'Erro ao listar planos' });
   }
 });
@@ -2022,7 +2000,6 @@ app.get('/api/admin/assinaturas/empresa/:companyId', verifySuperAdmin, async (re
       usuarios: usersResult.rows
     });
   } catch (error) {
-    console.error('Erro ao buscar empresa:', error);
     res.status(500).json({ error: 'Erro ao buscar empresa' });
   }
 });
@@ -2064,7 +2041,6 @@ app.post('/api/admin/assinaturas/alterar-status', verifySuperAdmin, async (req, 
       subscription: result.rows[0]
     });
   } catch (error) {
-    console.error('Erro ao alterar status:', error);
     res.status(500).json({ error: 'Erro ao alterar status' });
   }
 });
@@ -2126,7 +2102,6 @@ app.post('/api/admin/assinaturas/criar-empresa', verifySuperAdmin, async (req, r
       throw error;
     }
   } catch (error) {
-    console.error('Erro ao criar empresa:', error);
     res.status(500).json({ error: 'Erro ao criar empresa', message: error.message });
   }
 });
@@ -2166,7 +2141,6 @@ app.delete('/api/admin/assinaturas/empresa/:companyId', verifySuperAdmin, async 
       throw error;
     }
   } catch (error) {
-    console.error('Erro ao excluir empresa:', error);
     res.status(500).json({ error: 'Erro ao excluir empresa' });
   }
 });
@@ -2215,7 +2189,6 @@ app.post('/api/admin/assinaturas/empresa/:companyId/gerar-cobranca', verifySuper
           [customerId, companyId]
         );
       } catch (asaasError) {
-        console.error('Erro ao criar cliente Asaas:', asaasError.response?.data || asaasError.message);
         return res.status(500).json({
           error: 'Erro ao criar cliente no gateway de pagamento',
           details: asaasError.response?.data?.errors?.[0]?.description
@@ -2254,7 +2227,6 @@ app.post('/api/admin/assinaturas/empresa/:companyId/gerar-cobranca', verifySuper
           expirationDate: pixResponse.data.expirationDate
         };
       } catch (pixError) {
-        console.error('Erro ao gerar QR Code PIX:', pixError.message);
       }
     }
 
@@ -2279,7 +2251,6 @@ app.post('/api/admin/assinaturas/empresa/:companyId/gerar-cobranca', verifySuper
     });
 
   } catch (error) {
-    console.error('Erro ao gerar cobrança:', error.response?.data || error.message);
     res.status(500).json({
       error: 'Erro ao gerar cobrança',
       details: error.response?.data?.errors?.[0]?.description || error.message
@@ -2317,7 +2288,6 @@ app.get('/api/admin/assinaturas/empresa/:companyId/pagamentos', verifySuperAdmin
         });
         asaasPayments = asaasResponse.data.data || [];
       } catch (asaasError) {
-        console.error('Erro ao buscar pagamentos Asaas:', asaasError.message);
       }
     }
 
@@ -2327,7 +2297,6 @@ app.get('/api/admin/assinaturas/empresa/:companyId/pagamentos', verifySuperAdmin
     });
 
   } catch (error) {
-    console.error('Erro ao listar pagamentos:', error);
     res.status(500).json({ error: 'Erro ao listar pagamentos' });
   }
 });
@@ -2359,7 +2328,6 @@ app.get('/api/admin/pagamentos/:paymentId/status', verifySuperAdmin, async (req,
     });
 
   } catch (error) {
-    console.error('Erro ao consultar pagamento:', error.response?.data || error.message);
     res.status(500).json({ error: 'Erro ao consultar status do pagamento' });
   }
 });
@@ -2415,7 +2383,6 @@ app.post('/api/admin/assinaturas/empresa/:companyId/assinatura-recorrente', veri
           [customerId, companyId]
         );
       } catch (asaasError) {
-        console.error('Erro ao criar cliente Asaas:', asaasError.response?.data || asaasError.message);
         return res.status(500).json({
           error: 'Erro ao criar cliente no gateway de pagamento',
           details: asaasError.response?.data?.errors?.[0]?.description
@@ -2482,7 +2449,6 @@ app.post('/api/admin/assinaturas/empresa/:companyId/assinatura-recorrente', veri
     });
 
   } catch (error) {
-    console.error('Erro ao criar assinatura recorrente:', error.response?.data || error.message);
     res.status(500).json({
       error: 'Erro ao criar assinatura recorrente',
       details: error.response?.data?.errors?.[0]?.description || error.message
@@ -2523,7 +2489,6 @@ app.post('/api/admin/assinaturas/empresa/:companyId/cancelar-assinatura', verify
     res.json({ message: 'Assinatura cancelada com sucesso' });
 
   } catch (error) {
-    console.error('Erro ao cancelar assinatura:', error.response?.data || error.message);
     res.status(500).json({
       error: 'Erro ao cancelar assinatura',
       details: error.response?.data?.errors?.[0]?.description || error.message
@@ -2596,7 +2561,6 @@ app.put('/api/admin/assinaturas/empresa/:companyId/assinatura-recorrente', verif
     });
 
   } catch (error) {
-    console.error('Erro ao atualizar assinatura:', error.response?.data || error.message);
     res.status(500).json({
       error: 'Erro ao atualizar assinatura',
       details: error.response?.data?.errors?.[0]?.description || error.message
@@ -2648,7 +2612,6 @@ app.get('/api/admin/assinaturas/empresa/:companyId/assinatura-recorrente', verif
     });
 
   } catch (error) {
-    console.error('Erro ao buscar assinatura:', error.response?.data || error.message);
     res.status(500).json({
       error: 'Erro ao buscar detalhes da assinatura',
       details: error.response?.data?.errors?.[0]?.description || error.message
@@ -2680,7 +2643,6 @@ app.get('/api/admin/assinaturas/empresa/:companyId/faturas-pendentes', verifySup
     res.json({ payments: asaasResponse.data.data || [] });
 
   } catch (error) {
-    console.error('Erro ao buscar faturas pendentes:', error.response?.data || error.message);
     res.status(500).json({ error: 'Erro ao buscar faturas pendentes' });
   }
 });
@@ -2710,7 +2672,6 @@ app.post('/api/admin/assinaturas/planos', verifySuperAdmin, async (req, res) => 
     });
 
   } catch (error) {
-    console.error('Erro ao criar plano:', error);
     res.status(500).json({ error: 'Erro ao criar plano', message: error.message });
   }
 });
@@ -2750,7 +2711,6 @@ app.put('/api/admin/assinaturas/planos/:planoId', verifySuperAdmin, async (req, 
     });
 
   } catch (error) {
-    console.error('Erro ao atualizar plano:', error);
     res.status(500).json({ error: 'Erro ao atualizar plano' });
   }
 });
@@ -2778,7 +2738,6 @@ app.delete('/api/admin/assinaturas/planos/:planoId', verifySuperAdmin, async (re
     res.json({ message: 'Plano excluído com sucesso' });
 
   } catch (error) {
-    console.error('Erro ao excluir plano:', error);
     res.status(500).json({ error: 'Erro ao excluir plano' });
   }
 });
@@ -2802,7 +2761,6 @@ app.get('/api/admin/empresas/:companyId/usuarios', verifySuperAdmin, async (req,
     res.json({ usuarios: result.rows });
 
   } catch (error) {
-    console.error('Erro ao listar usuários:', error);
     res.status(500).json({ error: 'Erro ao listar usuários' });
   }
 });
@@ -2843,7 +2801,6 @@ app.post('/api/admin/empresas/:companyId/usuarios', verifySuperAdmin, async (req
     });
 
   } catch (error) {
-    console.error('Erro ao criar usuário:', error);
     res.status(500).json({ error: 'Erro ao criar usuário' });
   }
 });
@@ -2874,7 +2831,6 @@ app.put('/api/admin/usuarios/:usuarioId', verifySuperAdmin, async (req, res) => 
     });
 
   } catch (error) {
-    console.error('Erro ao atualizar usuário:', error);
     res.status(500).json({ error: 'Erro ao atualizar usuário' });
   }
 });
@@ -2905,7 +2861,6 @@ app.post('/api/admin/usuarios/:usuarioId/resetar-senha', verifySuperAdmin, async
     });
 
   } catch (error) {
-    console.error('Erro ao resetar senha:', error);
     res.status(500).json({ error: 'Erro ao resetar senha' });
   }
 });
@@ -2945,7 +2900,6 @@ app.delete('/api/admin/usuarios/:usuarioId', verifySuperAdmin, async (req, res) 
     res.json({ message: 'Usuário excluído com sucesso' });
 
   } catch (error) {
-    console.error('Erro ao excluir usuário:', error);
     res.status(500).json({ error: 'Erro ao excluir usuário' });
   }
 });
@@ -2977,7 +2931,6 @@ app.put('/api/admin/assinaturas/empresa/:companyId', verifySuperAdmin, async (re
     });
 
   } catch (error) {
-    console.error('Erro ao atualizar empresa:', error);
     res.status(500).json({ error: 'Erro ao atualizar empresa' });
   }
 });
@@ -3046,7 +2999,6 @@ app.get('/api/admin/sessions/online', verifySuperAdmin, async (req, res) => {
       total: users.length
     });
   } catch (error) {
-    console.error('Erro ao buscar usuários online:', error);
     res.status(500).json({ error: 'Erro ao buscar usuários online' });
   }
 });
@@ -3101,7 +3053,6 @@ app.get('/api/admin/sessions/stats', verifySuperAdmin, async (req, res) => {
       period_days: days
     });
   } catch (error) {
-    console.error('Erro ao buscar estatísticas:', error);
     res.status(500).json({ error: 'Erro ao buscar estatísticas de sessões' });
   }
 });
@@ -3132,7 +3083,6 @@ app.get('/api/admin/sessions/user/:userId', verifySuperAdmin, async (req, res) =
 
     res.json({ sessions });
   } catch (error) {
-    console.error('Erro ao buscar histórico de sessões:', error);
     res.status(500).json({ error: 'Erro ao buscar histórico de sessões' });
   }
 });
@@ -3277,7 +3227,6 @@ app.get('/api/admin/dashboard', verifySuperAdmin, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar dashboard:', error);
     res.status(500).json({ error: 'Erro ao buscar estatísticas do dashboard' });
   }
 });
@@ -3336,7 +3285,6 @@ app.get('/api/billing/invoices', async (req, res) => {
     res.json({ data: invoices });
 
   } catch (error) {
-    console.error('Erro ao listar faturas:', error.response?.data || error.message);
     // Retorna array vazio em caso de erro para não quebrar o frontend
     res.json({ data: [] });
   }
@@ -3411,7 +3359,6 @@ app.get('/api/billing/stats', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar stats:', error.response?.data || error.message);
     res.json({
       data: {
         total_paid: 0,
@@ -3476,7 +3423,6 @@ app.get('/api/billing/next', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar próxima fatura:', error.response?.data || error.message);
     res.json({ data: null });
   }
 });
@@ -3522,7 +3468,6 @@ app.get('/api/billing/overdue', async (req, res) => {
     res.json({ data: overduePayments });
 
   } catch (error) {
-    console.error('Erro ao buscar faturas vencidas:', error.response?.data || error.message);
     res.json({ data: [] });
   }
 });
@@ -3574,7 +3519,6 @@ app.get('/api/billing/upcoming', async (req, res) => {
     res.json({ data: upcomingPayments });
 
   } catch (error) {
-    console.error('Erro ao buscar faturas próximas:', error.response?.data || error.message);
     res.json({ data: [] });
   }
 });
@@ -3649,7 +3593,6 @@ app.get('/api/billing/dashboard', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar dashboard:', error.response?.data || error.message);
     res.json({
       data: {
         total_revenue: 0,
@@ -3689,7 +3632,6 @@ app.use((req, res) => {
 
 // Tratamento de erros
 app.use((err, req, res, next) => {
-  console.error('Erro:', err);
   res.status(500).json({ error: 'Erro interno do servidor', message: err.message });
 });
 

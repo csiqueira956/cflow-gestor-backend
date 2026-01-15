@@ -24,7 +24,6 @@ export const getMySubscription = async (req, res) => {
       data: subscription
     });
   } catch (error) {
-    console.error('❌ Erro ao buscar assinatura:', error);
     return res.status(500).json({
       error: 'Erro ao buscar assinatura',
       message: error.message
@@ -59,7 +58,6 @@ export const createTrial = async (req, res) => {
       data: subscription
     });
   } catch (error) {
-    console.error('❌ Erro ao criar trial:', error);
     return res.status(500).json({
       error: 'Erro ao criar trial',
       message: error.message
@@ -122,7 +120,6 @@ export const upgrade = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erro ao fazer upgrade:', error);
     return res.status(500).json({
       error: 'Erro ao fazer upgrade',
       message: error.message
@@ -183,7 +180,6 @@ export const downgrade = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erro ao fazer downgrade:', error);
     return res.status(500).json({
       error: 'Erro ao fazer downgrade',
       message: error.message
@@ -227,7 +223,6 @@ export const cancel = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erro ao cancelar assinatura:', error);
     return res.status(500).json({
       error: 'Erro ao cancelar assinatura',
       message: error.message
@@ -274,7 +269,6 @@ export const reactivate = async (req, res) => {
       data: reactivatedSub
     });
   } catch (error) {
-    console.error('❌ Erro ao reativar assinatura:', error);
     return res.status(500).json({
       error: 'Erro ao reativar assinatura',
       message: error.message
@@ -305,7 +299,6 @@ export const getHistory = async (req, res) => {
       data: history
     });
   } catch (error) {
-    console.error('❌ Erro ao buscar histórico:', error);
     return res.status(500).json({
       error: 'Erro ao buscar histórico',
       message: error.message
@@ -370,7 +363,6 @@ export const getSummary = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erro ao buscar resumo:', error);
     return res.status(500).json({
       error: 'Erro ao buscar resumo',
       message: error.message
@@ -435,7 +427,6 @@ export const getUsage = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erro ao buscar uso:', error);
     return res.status(500).json({
       error: 'Erro ao buscar uso',
       message: error.message

@@ -28,7 +28,6 @@ export const listarUsuariosEmpresa = async (req, res) => {
       usuarios: rows
     });
   } catch (error) {
-    console.error('❌ Erro ao listar usuários:', error);
     return res.status(500).json({
       error: 'Erro ao listar usuários'
     });
@@ -80,8 +79,6 @@ export const criarUsuarioEmpresa = async (req, res) => {
       [nome, email, senhaHash, role, celular || null, companyId]
     );
 
-    console.log(`✅ Usuário criado: ${email} (ID: ${result.lastID})`);
-
     return res.status(201).json({
       message: 'Usuário criado com sucesso',
       usuario: {
@@ -94,7 +91,6 @@ export const criarUsuarioEmpresa = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erro ao criar usuário:', error);
     return res.status(500).json({
       error: 'Erro ao criar usuário'
     });
@@ -153,13 +149,10 @@ export const atualizarUsuario = async (req, res) => {
       [nome, email, role, celular || null, usuarioId]
     );
 
-    console.log(`✅ Usuário atualizado: ${email} (ID: ${usuarioId})`);
-
     return res.json({
       message: 'Usuário atualizado com sucesso'
     });
   } catch (error) {
-    console.error('❌ Erro ao atualizar usuário:', error);
     return res.status(500).json({
       error: 'Erro ao atualizar usuário'
     });
@@ -189,13 +182,10 @@ export const excluirUsuario = async (req, res) => {
     // Excluir usuário
     await pool.run('DELETE FROM usuarios WHERE id = ?', [usuarioId]);
 
-    console.log(`✅ Usuário excluído: ${existingUser[0].email} (ID: ${usuarioId})`);
-
     return res.json({
       message: 'Usuário excluído com sucesso'
     });
   } catch (error) {
-    console.error('❌ Erro ao excluir usuário:', error);
     return res.status(500).json({
       error: 'Erro ao excluir usuário'
     });
@@ -241,14 +231,11 @@ export const resetarSenhaUsuario = async (req, res) => {
       [senhaHash, usuarioId]
     );
 
-    console.log(`✅ Senha resetada para: ${existingUser[0].email} (ID: ${usuarioId})`);
-
     return res.json({
       message: 'Senha resetada com sucesso',
       senha_temporaria: novaSenha
     });
   } catch (error) {
-    console.error('❌ Erro ao resetar senha:', error);
     return res.status(500).json({
       error: 'Erro ao resetar senha'
     });
@@ -309,13 +296,10 @@ export const alterarSenha = async (req, res) => {
       [novaSenhaHash, usuarioId]
     );
 
-    console.log(`✅ Senha alterada com sucesso para usuário ID: ${usuarioId}`);
-
     return res.json({
       message: 'Senha alterada com sucesso'
     });
   } catch (error) {
-    console.error('❌ Erro ao alterar senha:', error);
     return res.status(500).json({
       error: 'Erro ao alterar senha'
     });

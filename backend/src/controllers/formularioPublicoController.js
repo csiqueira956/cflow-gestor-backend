@@ -20,7 +20,6 @@ export const criarFormulario = async (req, res) => {
       link: `${process.env.FRONTEND_URL}/formulario/${formulario.token}`,
     });
   } catch (error) {
-    console.error('Erro ao criar formulário:', error);
     res.status(500).json({ error: 'Erro ao criar formulário' });
   }
 };
@@ -33,7 +32,6 @@ export const listarFormularios = async (req, res) => {
 
     res.json({ formularios });
   } catch (error) {
-    console.error('Erro ao listar formulários:', error);
     res.status(500).json({ error: 'Erro ao listar formulários' });
   }
 };
@@ -59,7 +57,6 @@ export const buscarFormulario = async (req, res) => {
 
     res.json({ formulario });
   } catch (error) {
-    console.error('Erro ao buscar formulário:', error);
     res.status(500).json({ error: 'Erro ao buscar formulário' });
   }
 };
@@ -69,8 +66,6 @@ export const submeterFormulario = async (req, res) => {
   try {
     const { token } = req.params;
     const dadosCliente = req.body;
-
-    console.log('📝 Submissão de formulário público recebida:', { token, nome: dadosCliente.nome });
 
     // Buscar formulário
     const formulario = await FormularioPublico.findByToken(token);
@@ -95,8 +90,6 @@ export const submeterFormulario = async (req, res) => {
       etapa: 'novo_contato',
     });
 
-    console.log('✅ Cliente criado:', novoCliente.id);
-
     // Incrementar contador
     await FormularioPublico.incrementarPreenchimentos(token);
 
@@ -106,15 +99,8 @@ export const submeterFormulario = async (req, res) => {
       enviarEmailCadastroCliente(dadosCliente),
       // Email para o vendedor com notificação
       enviarEmailNotificacaoVendedor(formulario.vendedor_email, formulario.vendedor_nome, dadosCliente)
-    ]).then(([resultCliente, resultVendedor]) => {
-      if (resultCliente.success) {
-        console.log('📧 Email enviado para o cliente');
-      }
-      if (resultVendedor.success) {
-        console.log('📧 Email enviado para o vendedor:', formulario.vendedor_email);
-      }
-    }).catch(error => {
-      console.error('⚠️  Erro ao enviar emails (não crítico):', error);
+    ]).catch(() => {
+      // Erro ao enviar emails não é crítico
     });
 
     res.status(201).json({
@@ -125,7 +111,6 @@ export const submeterFormulario = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Erro ao submeter formulário:', error);
     res.status(500).json({ error: 'Erro ao processar cadastro. Tente novamente.' });
   }
 };
@@ -147,7 +132,6 @@ export const toggleAtivo = async (req, res) => {
       formulario,
     });
   } catch (error) {
-    console.error('Erro ao alterar status:', error);
     res.status(500).json({ error: 'Erro ao alterar status' });
   }
 };
@@ -166,7 +150,6 @@ export const deletarFormulario = async (req, res) => {
 
     res.json({ message: 'Formulário deletado com sucesso' });
   } catch (error) {
-    console.error('Erro ao deletar formulário:', error);
     res.status(500).json({ error: 'Erro ao deletar formulário' });
   }
 };

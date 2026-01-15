@@ -85,7 +85,6 @@ async function getSubscriptionUsage(companyId) {
 
     return usage;
   } catch (error) {
-    console.error('Erro ao buscar uso da assinatura:', error);
     throw error;
   }
 }
@@ -158,10 +157,7 @@ export const requireActiveSubscription = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Erro ao verificar assinatura:', error);
-
-    // Em modo degradado, permitir acesso mas logar
-    console.warn('ATENÇÃO: Permitindo acesso em modo degradado');
+    // Em modo degradado, permitir acesso
     req.subscription = {
       status: 'UNKNOWN',
       error: true,
@@ -224,7 +220,6 @@ export const canCreateUserPublic = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Erro ao verificar limite de usuários (público):', error);
     return res.status(500).json({
       error: 'Erro ao verificar limite de usuários'
     });
@@ -275,7 +270,6 @@ export const canCreateUser = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Erro ao verificar limite de usuários:', error);
     return res.status(500).json({
       error: 'Erro ao verificar limite de usuários'
     });
@@ -334,7 +328,6 @@ export const canCreateLeadPublic = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Erro ao verificar limite de leads (público):', error);
     return res.status(500).json({
       error: 'Erro ao verificar limite de leads'
     });
@@ -385,7 +378,6 @@ export const canCreateLead = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Erro ao verificar limite de leads:', error);
     return res.status(500).json({
       error: 'Erro ao verificar limite de leads'
     });
@@ -441,7 +433,6 @@ export const canUploadFile = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Erro ao verificar limite de armazenamento:', error);
     return res.status(500).json({
       error: 'Erro ao verificar limite de armazenamento'
     });
@@ -481,7 +472,6 @@ export const checkSubscriptionWarning = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Erro ao verificar assinatura (modo warning):', error);
     next();
   }
 };

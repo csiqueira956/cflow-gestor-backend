@@ -195,8 +195,6 @@ class Usuario {
       throw new Error('company_id é obrigatório para atualizar usuário');
     }
 
-    console.log('🔧 Usuario.update - Dados recebidos:', { id, nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, temSenha: !!senha_hash });
-
     // Preparar query dinamicamente baseado nos campos fornecidos
     const updates = [];
     const values = [];
@@ -246,12 +244,7 @@ class Usuario {
       RETURNING id, nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, created_at
     `;
 
-    console.log('📝 SQL Query:', query);
-    console.log('📝 SQL Values:', values);
-
     const result = await pool.query(query, values);
-
-    console.log('✅ Usuario atualizado no banco:', result.rows[0]);
 
     return result.rows[0];
   }

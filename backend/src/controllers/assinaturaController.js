@@ -25,8 +25,6 @@ async function callAdminSaasAPI(endpoint, data) {
 
     return response.data;
   } catch (error) {
-    console.error(`Erro ao chamar API ${endpoint}:`, error.message);
-
     if (error.response) {
       throw new Error(error.response.data.error || error.response.data.message || 'Erro na API Admin SaaS');
     }
@@ -110,7 +108,6 @@ export const getMinhaAssinatura = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao obter assinatura:', error);
     res.status(500).json({
       error: 'Erro ao obter dados da assinatura',
       message: error.message
@@ -178,7 +175,6 @@ export const checkStatus = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao verificar status:', error);
     res.status(500).json({
       error: 'Erro ao verificar status da assinatura',
       message: error.message
@@ -248,7 +244,6 @@ export const updatePlan = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao atualizar plano:', error);
     res.status(500).json({
       error: 'Erro ao atualizar plano da assinatura',
       message: error.message
@@ -286,7 +281,6 @@ export const getPagamentos = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao obter pagamentos:', error);
     res.status(500).json({
       error: 'Erro ao obter histórico de pagamentos',
       message: error.message
@@ -360,7 +354,6 @@ export const getUso = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao obter uso:', error);
     res.status(500).json({
       error: 'Erro ao obter informações de uso',
       message: error.message
@@ -423,7 +416,6 @@ export const validarNovoUsuario = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao validar criação de usuário:', error);
     res.status(500).json({
       error: 'Erro ao validar criação de usuário',
       message: error.message
@@ -495,7 +487,6 @@ export const validarNovoLead = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao validar criação de lead:', error);
     res.status(500).json({
       error: 'Erro ao validar criação de lead',
       message: error.message
@@ -620,7 +611,6 @@ export const getAllCompaniesSubscriptions = async (req, res) => {
             created_at: company.data_inicio
           };
         } catch (error) {
-          console.error(`Erro ao buscar dados da empresa ${company.company_id}:`, error);
           return {
             company_id: company.company_id,
             company_nome: company.company_nome,
@@ -650,7 +640,6 @@ export const getAllCompaniesSubscriptions = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao listar assinaturas:', error);
     res.status(500).json({
       error: 'Erro ao listar assinaturas',
       message: error.message
@@ -774,7 +763,6 @@ export const getCompanySubscriptionDetails = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao obter detalhes da empresa:', error);
     res.status(500).json({
       error: 'Erro ao obter detalhes da empresa',
       message: error.message
@@ -833,7 +821,6 @@ export const changeSubscriptionStatus = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao alterar status:', error);
     res.status(500).json({
       error: 'Erro ao alterar status da assinatura',
       message: error.message
@@ -1000,7 +987,6 @@ export const createCompany = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao criar empresa:', error);
     res.status(500).json({
       error: 'Erro ao criar empresa',
       message: error.message
@@ -1115,8 +1101,6 @@ export const updateCompany = async (req, res) => {
         valor_mensal = plano.preco_por_usuario * users_count;
       }
 
-      console.log(`📊 Recalculando valor mensal: Plano ${plano.nome} (${plano.tipo_cobranca}) | Usuários: ${users_count} | Valor: R$ ${valor_mensal.toFixed(2)}`);
-
       // Atualizar assinatura
       await pool.run(
         `UPDATE assinaturas
@@ -1129,8 +1113,6 @@ export const updateCompany = async (req, res) => {
       );
     }
 
-    console.log(`✅ Empresa atualizada: ${companyId}`);
-
     res.json({
       success: true,
       message: 'Empresa atualizada com sucesso',
@@ -1140,7 +1122,6 @@ export const updateCompany = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao atualizar empresa:', error);
     res.status(500).json({
       error: 'Erro ao atualizar empresa',
       message: error.message
@@ -1202,15 +1183,12 @@ export const deleteCompany = async (req, res) => {
     // 5. Excluir empresa
     await pool.run('DELETE FROM empresas WHERE id = ?', [companyId]);
 
-    console.log(`✅ Empresa excluída: ${empresa.nome} (ID: ${companyId})`);
-
     res.json({
       success: true,
       message: `Empresa "${empresa.nome}" excluída com sucesso`
     });
 
   } catch (error) {
-    console.error('Erro ao excluir empresa:', error);
     res.status(500).json({
       error: 'Erro ao excluir empresa',
       message: error.message
@@ -1276,8 +1254,6 @@ export const createPlan = async (req, res) => {
       ]
     );
 
-    console.log(`✅ Plano criado: ${nome} (ID: ${result.lastID})`);
-
     res.status(201).json({
       success: true,
       message: 'Plano criado com sucesso',
@@ -1295,7 +1271,6 @@ export const createPlan = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao criar plano:', error);
     res.status(500).json({
       error: 'Erro ao criar plano',
       message: error.message
@@ -1380,15 +1355,12 @@ export const editPlan = async (req, res) => {
       ]
     );
 
-    console.log(`✅ Plano atualizado (ID: ${planoId})`);
-
     res.json({
       success: true,
       message: 'Plano atualizado com sucesso'
     });
 
   } catch (error) {
-    console.error('Erro ao atualizar plano:', error);
     res.status(500).json({
       error: 'Erro ao atualizar plano',
       message: error.message
@@ -1456,8 +1428,6 @@ export const deletePlan = async (req, res) => {
     // Se não há assinaturas, pode excluir
     await pool.run('DELETE FROM planos WHERE id = ?', [planoId]);
 
-    console.log(`✅ Plano excluído: ${plano.nome} (ID: ${planoId})`);
-
     res.json({
       success: true,
       message: `Plano "${plano.nome}" excluído com sucesso`,
@@ -1465,7 +1435,6 @@ export const deletePlan = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao excluir plano:', error);
     res.status(500).json({
       error: 'Erro ao excluir plano',
       message: error.message
@@ -1524,7 +1493,6 @@ export const gerarCobrancaCartao = async (req, res) => {
 
     if (assinaturaResult.rows && assinaturaResult.rows.length > 0 && assinaturaResult.rows[0].asaas_customer_id) {
       customerId = assinaturaResult.rows[0].asaas_customer_id;
-      console.log(`✅ Usando customer ASAAS existente: ${customerId}`);
     } else {
       // Criar novo cliente no ASAAS
       const customer = await asaasService.createOrGetCustomer({
@@ -1541,8 +1509,6 @@ export const gerarCobrancaCartao = async (req, res) => {
         'UPDATE assinaturas SET asaas_customer_id = ? WHERE company_id = ?',
         [customerId, companyId]
       );
-
-      console.log(`✅ Novo customer ASAAS criado: ${customerId}`);
     }
 
     // Gerar link de pagamento via cartão
@@ -1566,8 +1532,6 @@ export const gerarCobrancaCartao = async (req, res) => {
       [companyId, payment.id, valor, descricaoFinal]
     );
 
-    console.log(`✅ Link de pagamento gerado para empresa ${companyId}: ${payment.paymentLink}`);
-
     res.json({
       success: true,
       message: 'Link de pagamento gerado com sucesso',
@@ -1582,7 +1546,6 @@ export const gerarCobrancaCartao = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao gerar cobrança via cartão:', error);
     res.status(500).json({
       error: 'Erro ao gerar link de pagamento',
       message: error.message
@@ -1653,7 +1616,6 @@ export const getCompanyPagamentos = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao obter histórico de pagamentos da empresa:', error);
     res.status(500).json({
       error: 'Erro ao obter histórico de pagamentos',
       message: error.message
@@ -1687,7 +1649,6 @@ export const getAvailablePlans = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar planos:', error);
     res.status(500).json({
       error: 'Erro ao buscar planos',
       message: error.message
@@ -1763,7 +1724,6 @@ export const getPlansForUpgrade = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar planos para upgrade:', error);
     res.status(500).json({
       error: 'Erro ao buscar planos disponíveis',
       message: error.message
@@ -1845,8 +1805,6 @@ export const initiateUpgrade = async (req, res) => {
       valor_mensal = novoPlano.preco_por_usuario * usuarios;
     }
 
-    console.log(`💰 Iniciando upgrade: Plano ${novoPlano.nome}, Valor: R$ ${valor_mensal}`);
-
     // Criar ou obter cliente no ASAAS
     const customer = await asaasService.createOrGetCustomer({
       nome: empresa.nome,
@@ -1879,8 +1837,6 @@ export const initiateUpgrade = async (req, res) => {
         `Upgrade para ${novoPlano.nome} - ${empresa.nome}`
       );
     }
-
-    console.log(`✅ Pagamento criado no ASAAS: ${paymentData.id}`);
 
     // Salvar informações do upgrade pendente (status ainda TRIAL ou atual)
     await pool.run(
@@ -1926,7 +1882,6 @@ export const initiateUpgrade = async (req, res) => {
     res.json(response);
 
   } catch (error) {
-    console.error('❌ Erro ao iniciar upgrade:', error);
     res.status(500).json({
       error: 'Erro ao iniciar upgrade de plano',
       message: error.message
@@ -1941,8 +1896,6 @@ export const initiateUpgrade = async (req, res) => {
 export const asaasWebhook = async (req, res) => {
   try {
     const { event, payment } = req.body;
-
-    console.log(`🔔 Webhook ASAAS recebido: ${event}`);
 
     if (!event || !payment) {
       return res.status(400).json({
@@ -1961,13 +1914,10 @@ export const asaasWebhook = async (req, res) => {
       );
 
       if (!assinaturaResult.rows || assinaturaResult.rows.length === 0) {
-        console.warn(`⚠️  Assinatura não encontrada para customer ${payment.customer}`);
         return res.status(200).json({ received: true });
       }
 
       const assinatura = assinaturaResult.rows[0];
-
-      console.log(`✅ Pagamento confirmado para empresa ${assinatura.company_id}`);
 
       // Atualizar status da assinatura para ACTIVE
       const now = new Date();
@@ -1982,15 +1932,12 @@ export const asaasWebhook = async (req, res) => {
          WHERE company_id = ?`,
         [proximoVencimento.toISOString(), assinatura.company_id]
       );
-
-      console.log(`🎉 Assinatura ativada para empresa ${assinatura.company_id}`);
     }
 
     // Sempre retornar 200 para o webhook
     res.status(200).json({ received: true });
 
   } catch (error) {
-    console.error('❌ Erro ao processar webhook ASAAS:', error);
     // Mesmo com erro, retornar 200 para não reprocessar
     res.status(200).json({ received: true, error: error.message });
   }

@@ -10,12 +10,6 @@ export const asaasWebhook = async (req, res) => {
   try {
     const event = req.body;
 
-    console.log('📨 Webhook Asaas recebido:', {
-      event: event.event,
-      paymentId: event.payment?.id,
-      subscriptionId: event.payment?.subscription
-    });
-
     // Salvar evento no banco
     await pool.query(
       `INSERT INTO webhook_events (gateway, event_type, event_id, payload, processed)
@@ -37,8 +31,6 @@ export const asaasWebhook = async (req, res) => {
     // Responder 200 para Asaas saber que recebemos
     return res.status(200).json({ received: true });
   } catch (error) {
-    console.error('❌ Erro ao processar webhook Asaas:', error);
-
     // Salvar erro no banco
     try {
       await pool.query(
@@ -48,7 +40,7 @@ export const asaasWebhook = async (req, res) => {
         [error.message, req.body.id || Date.now().toString()]
       );
     } catch (dbError) {
-      console.error('❌ Erro ao salvar erro do webhook:', dbError);
+      // Erro silencioso ao salvar log
     }
 
     // Sempre responder 200 para não ficar retentando
@@ -63,7 +55,6 @@ async function processAsaasEvent(event) {
   const { event: eventType, payment } = event;
 
   if (!payment) {
-    console.warn('⚠️ Evento sem informação de pagamento');
     return;
   }
 
@@ -91,7 +82,8 @@ async function processAsaasEvent(event) {
       break;
 
     default:
-      console.log('❓ Evento não tratado:', eventType);
+      // Evento não tratado
+      break;
   }
 }
 
@@ -99,15 +91,12 @@ async function processAsaasEvent(event) {
  * Pagamento criado
  */
 async function handlePaymentCreated(payment) {
-  console.log('💳 Processando: Pagamento criado', payment.id);
-
   const invoiceResult = await pool.query(
     'SELECT * FROM invoices WHERE gateway_invoice_id = $1',
     [payment.id]
   );
 
   if (invoiceResult.rows.length === 0) {
-    console.log('ℹ️ Fatura não encontrada no banco para este pagamento');
     return;
   }
 
@@ -119,30 +108,25 @@ async function handlePaymentCreated(payment) {
      WHERE id = $3`,
     [payment.invoiceUrl, payment.bankSlipUrl, invoice.id]
   );
-
-  console.log('✅ Fatura atualizada com URLs de pagamento');
 }
 
 /**
  * Pagamento atualizado
  */
 async function handlePaymentUpdated(payment) {
-  console.log('🔄 Processando: Pagamento atualizado', payment.id);
+  // Apenas log interno, sem ação necessária
 }
 
 /**
  * Pagamento confirmado/recebido
  */
 async function handlePaymentConfirmed(payment) {
-  console.log('✅ Processando: Pagamento confirmado', payment.id);
-
   const invoiceResult = await pool.query(
     'SELECT * FROM invoices WHERE gateway_invoice_id = $1',
     [payment.id]
   );
 
   if (invoiceResult.rows.length === 0) {
-    console.warn('⚠️ Fatura não encontrada para pagamento confirmado:', payment.id);
     return;
   }
 
@@ -150,18 +134,14 @@ async function handlePaymentConfirmed(payment) {
 
   await Invoice.markAsPaid(invoice.id, invoice.company_id);
 
-  console.log(`💰 Fatura ${invoice.id} marcada como paga`);
-
   const subscription = await Subscription.findById(invoice.subscription_id);
 
   if (!subscription) {
-    console.warn('⚠️ Assinatura não encontrada para fatura:', invoice.id);
     return;
   }
 
   if (subscription.status === 'trialing' || subscription.status === 'pending') {
     await Subscription.activate(subscription.id, subscription.company_id);
-    console.log(`🎉 Assinatura ${subscription.id} ativada!`);
   }
 
   if (subscription.status === 'past_due') {
@@ -169,7 +149,6 @@ async function handlePaymentConfirmed(payment) {
       `UPDATE subscriptions SET status = 'active' WHERE id = $1`,
       [subscription.id]
     );
-    console.log(`✅ Assinatura ${subscription.id} reativada após pagamento`);
   }
 }
 
@@ -177,8 +156,6 @@ async function handlePaymentConfirmed(payment) {
  * Pagamento vencido
  */
 async function handlePaymentOverdue(payment) {
-  console.log('⚠️ Processando: Pagamento vencido', payment.id);
-
   const invoiceResult = await pool.query(
     'SELECT * FROM invoices WHERE gateway_invoice_id = $1',
     [payment.id]
@@ -207,8 +184,6 @@ async function handlePaymentOverdue(payment) {
       ) VALUES ($1, $2, 'overdue', 'active', 'past_due', 'Pagamento vencido')`,
       [subscription.id, subscription.company_id]
     );
-
-    console.log(`⚠️ Assinatura ${subscription.id} marcada como vencida`);
   }
 }
 
@@ -216,8 +191,6 @@ async function handlePaymentOverdue(payment) {
  * Pagamento cancelado/reembolsado
  */
 async function handlePaymentCancelled(payment) {
-  console.log('🗑️ Processando: Pagamento cancelado', payment.id);
-
   const invoiceResult = await pool.query(
     'SELECT * FROM invoices WHERE gateway_invoice_id = $1',
     [payment.id]
@@ -230,8 +203,6 @@ async function handlePaymentCancelled(payment) {
   const invoice = invoiceResult.rows[0];
 
   await Invoice.cancel(invoice.id, invoice.company_id);
-
-  console.log(`❌ Fatura ${invoice.id} cancelada`);
 }
 
 /**
