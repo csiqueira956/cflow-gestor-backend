@@ -1722,7 +1722,8 @@ app.get('/api/admin/assinaturas/todas', verifySuperAdmin, async (req, res) => {
         s.current_period_end,
         s.trial_ends_at,
         p.name as plan_name,
-        p.price as plan_price
+        p.price as plan_price,
+        EXISTS(SELECT 1 FROM usuarios u WHERE u.company_id = c.id AND u.role = 'super_admin') as has_super_admin
       FROM companies c
       LEFT JOIN subscriptions s ON c.id = s.company_id
       LEFT JOIN plans p ON s.plan_id = p.id
@@ -1895,6 +1896,19 @@ app.post('/api/admin/assinaturas/criar-empresa', verifySuperAdmin, async (req, r
 app.delete('/api/admin/assinaturas/empresa/:companyId', verifySuperAdmin, async (req, res) => {
   try {
     const { companyId } = req.params;
+
+    // Verificar se a empresa tem usuários super_admin (não pode ser excluída)
+    const superAdminCheck = await pool.query(
+      `SELECT COUNT(*) as count FROM usuarios WHERE company_id = $1 AND role = 'super_admin'`,
+      [companyId]
+    );
+
+    if (parseInt(superAdminCheck.rows[0].count) > 0) {
+      return res.status(403).json({
+        error: 'Não é possível excluir esta empresa',
+        message: 'Esta empresa contém usuários super administradores e não pode ser excluída.'
+      });
+    }
 
     await pool.query('BEGIN');
 
