@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import Usuario from '../models/Usuario.js';
 import { generateToken } from '../middleware/auth.js';
 import pool from '../config/database.js';
+import { registerSession, registerLogout } from './sessionController.js';
 
 // Registro de novo usuário
 // SEGURANÇA: Esta rota é pública - role é sempre 'vendedor'
@@ -85,6 +86,11 @@ export const login = async (req, res) => {
       equipe_id: usuario.equipe_id
     });
 
+    // Registrar sessão de login
+    const ipAddress = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.headers['user-agent'];
+    await registerSession(usuario.id, usuario.company_id, ipAddress, userAgent);
+
     res.json({
       message: 'Login realizado com sucesso',
       token,
@@ -102,6 +108,17 @@ export const login = async (req, res) => {
   } catch (error) {
     console.error('Erro ao fazer login:', error);
     res.status(500).json({ error: 'Erro ao fazer login' });
+  }
+};
+
+// Logout de usuário
+export const logout = async (req, res) => {
+  try {
+    await registerLogout(req.user.id);
+    res.json({ message: 'Logout realizado com sucesso' });
+  } catch (error) {
+    console.error('Erro ao fazer logout:', error);
+    res.status(500).json({ error: 'Erro ao fazer logout' });
   }
 };
 

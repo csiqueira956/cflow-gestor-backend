@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import pool from '../config/database.js';
 
 dotenv.config();
 
@@ -15,11 +16,31 @@ export const authenticateToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded; // { id, email, role }
+
+    // Atualizar última atividade (async, não bloqueia a request)
+    updateUserActivity(decoded.id).catch(() => {});
+
     next();
   } catch (error) {
     return res.status(403).json({ error: 'Token inválido ou expirado' });
   }
 };
+
+// Função para atualizar última atividade do usuário
+async function updateUserActivity(userId) {
+  try {
+    await pool.query(
+      `UPDATE usuarios SET last_activity = NOW() WHERE id = $1`,
+      [userId]
+    );
+    await pool.query(
+      `UPDATE user_sessions SET last_activity = NOW() WHERE user_id = $1 AND is_active = true`,
+      [userId]
+    );
+  } catch (error) {
+    // Silently fail - não deve impactar a request
+  }
+}
 
 // Middleware para verificar se o usuário é admin da empresa
 export const isAdmin = (req, res, next) => {

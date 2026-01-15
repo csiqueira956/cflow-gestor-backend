@@ -21,6 +21,11 @@ import {
   excluirUsuario,
   resetarSenhaUsuario
 } from '../controllers/adminController.js';
+import {
+  getOnlineUsers,
+  getUserSessionHistory,
+  getSessionStats
+} from '../controllers/sessionController.js';
 import { authenticateToken, isSuperAdmin } from '../middleware/auth.js';
 import { executarVerificacoesAutomaticas } from '../services/notificationService.js';
 
@@ -106,5 +111,16 @@ router.post('/notifications/run-checks', authenticateToken, isSuperAdmin, async 
     });
   }
 });
+
+// === ROTAS DE SESSÕES E MONITORAMENTO (SUPER ADMIN) ===
+
+// Listar usuários online
+router.get('/sessions/online', authenticateToken, isSuperAdmin, getOnlineUsers);
+
+// Estatísticas de sessões
+router.get('/sessions/stats', authenticateToken, isSuperAdmin, getSessionStats);
+
+// Histórico de sessões de um usuário específico
+router.get('/sessions/user/:userId', authenticateToken, isSuperAdmin, getUserSessionHistory);
 
 export default router;

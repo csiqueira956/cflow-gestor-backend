@@ -181,6 +181,11 @@ export const superAdminAPI = {
 
   // Notificações
   executarVerificacoes: () => api.post('/admin/notifications/run-checks'),
+
+  // Sessões e Monitoramento
+  listarUsuariosOnline: (minutes = 5) => api.get('/admin/sessions/online', { params: { minutes } }),
+  estatisticasSessoes: (days = 7) => api.get('/admin/sessions/stats', { params: { days } }),
+  historicoSessoesUsuario: (userId, limit = 20) => api.get(`/admin/sessions/user/${userId}`, { params: { limit } }),
 };
 
 export default api;
