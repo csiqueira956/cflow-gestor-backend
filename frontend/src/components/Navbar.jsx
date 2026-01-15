@@ -17,6 +17,7 @@ const Navbar = () => {
   const [resultados, setResultados] = useState([]);
   const [buscando, setBuscando] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const [superAdminOpen, setSuperAdminOpen] = useState(false);
   const searchRef = useRef(null);
 
   // Salvar estado da sidebar no localStorage
@@ -28,6 +29,9 @@ const Navbar = () => {
   useEffect(() => {
     if (isConfigPath()) {
       setConfigOpen(true);
+    }
+    if (isSuperAdminPath()) {
+      setSuperAdminOpen(true);
     }
   }, [location.pathname]);
 
@@ -100,6 +104,10 @@ const Navbar = () => {
     return location.pathname.startsWith('/configuracoes');
   };
 
+  const isSuperAdminPath = () => {
+    return location.pathname.startsWith('/super-admin');
+  };
+
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,6 +146,13 @@ const Navbar = () => {
     { path: '/configuracoes/equipes', label: 'Equipes' },
     { path: '/configuracoes/administradoras', label: 'Administradoras' },
     { path: '/configuracoes/metas', label: 'Metas' },
+  ];
+
+  const superAdminSubItems = [
+    { path: '/super-admin', label: 'Dashboard', hash: '' },
+    { path: '/super-admin', label: 'Empresas', hash: 'empresas' },
+    { path: '/super-admin', label: 'Planos', hash: 'planos' },
+    { path: '/super-admin', label: 'Monitoramento', hash: 'monitoramento' },
   ];
 
   return (
@@ -316,24 +331,61 @@ const Navbar = () => {
 
             {/* Super Admin (apenas para super_admin) */}
             {isSuperAdmin() && (
-              <Link
-                to="/super-admin"
-                className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
-                  isActive('/super-admin')
-                    ? 'bg-red-50 text-red-600 font-semibold'
-                    : 'text-gray-700 hover:bg-gray-100'
-                } ${!isExpanded && 'justify-center'}`}
-                title={!isExpanded ? 'Super Admin' : ''}
-              >
-                <div className="flex-shrink-0">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                </div>
-                {isExpanded && (
-                  <span className="text-sm">Super Admin</span>
+              <div>
+                <button
+                  onClick={() => setSuperAdminOpen(!superAdminOpen)}
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
+                    isSuperAdminPath()
+                      ? 'bg-red-50 text-red-600 font-semibold'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  } ${!isExpanded && 'justify-center'}`}
+                  title={!isExpanded ? 'Super Admin' : ''}
+                >
+                  <div className="flex-shrink-0">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
+                  {isExpanded && (
+                    <>
+                      <span className="text-sm flex-1 text-left">Super Admin</span>
+                      <svg
+                        className={`w-4 h-4 transition-transform ${superAdminOpen ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </>
+                  )}
+                </button>
+
+                {/* Submenu Super Admin */}
+                {isExpanded && superAdminOpen && (
+                  <div className="mt-1 space-y-1">
+                    {superAdminSubItems.map((subItem) => (
+                      <button
+                        key={subItem.hash}
+                        onClick={() => {
+                          navigate('/super-admin');
+                          // Usar um pequeno delay para garantir que a página carregou
+                          setTimeout(() => {
+                            window.dispatchEvent(new CustomEvent('superAdminTabChange', { detail: subItem.hash || 'dashboard' }));
+                          }, 100);
+                        }}
+                        className={`w-full flex items-center gap-3 pl-12 pr-3 py-2 rounded-lg transition-all text-sm text-left ${
+                          isSuperAdminPath()
+                            ? 'text-red-600 hover:bg-red-50'
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {subItem.label}
+                      </button>
+                    ))}
+                  </div>
                 )}
-              </Link>
+              </div>
             )}
           </div>
         </nav>

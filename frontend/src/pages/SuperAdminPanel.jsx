@@ -112,6 +112,18 @@ const SuperAdminPanel = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Listener para mudança de aba via navbar
+  useEffect(() => {
+    const handleTabChange = (event) => {
+      const tab = event.detail;
+      if (['dashboard', 'empresas', 'planos', 'monitoramento'].includes(tab)) {
+        setActiveTab(tab);
+      }
+    };
+    window.addEventListener('superAdminTabChange', handleTabChange);
+    return () => window.removeEventListener('superAdminTabChange', handleTabChange);
+  }, []);
+
   const carregarDados = async () => {
     try {
       setLoading(true);
