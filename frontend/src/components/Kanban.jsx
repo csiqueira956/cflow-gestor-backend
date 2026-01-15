@@ -551,45 +551,38 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
 
   return (
     <div className="p-4">
-      {/* Cabeçalho com ações */}
-      <div className="mb-4 flex justify-between items-center">
-        <div>
-          <p className="text-gray-600 font-medium">
-            Total de <span className="font-bold text-primary-600">{clientesFiltrados.length}</span> clientes {termoBusca || filtroEtapa !== 'todas' ? 'encontrados' : 'distribuídos em ' + colunas.length + ' etapas'}
-          </p>
-        </div>
-        <div className="flex gap-3">
-          {isAdmin() && (
-            <button
-              onClick={exportarParaCSV}
-              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-2"
-              title="Exportar dados filtrados para CSV"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Exportar CSV
-            </button>
-          )}
+      {/* Botões de ação */}
+      <div className="mb-4 flex justify-end gap-2">
+        {isAdmin() && (
           <button
-            onClick={() => setMostrarNovaColuna(!mostrarNovaColuna)}
-            className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-2"
+            onClick={exportarParaCSV}
+            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-2"
+            title="Exportar dados filtrados para CSV"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            Nova Etapa
+            Exportar CSV
           </button>
-          <button
-            onClick={abrirModalCadastro}
-            className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Novo Cliente
-          </button>
-        </div>
+        )}
+        <button
+          onClick={() => setMostrarNovaColuna(!mostrarNovaColuna)}
+          className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Nova Etapa
+        </button>
+        <button
+          onClick={abrirModalCadastro}
+          className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors font-medium text-sm flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Novo Cliente
+        </button>
       </div>
 
       {/* Barra de Busca e Filtros */}
@@ -642,6 +635,13 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
             </select>
           </div>
         </div>
+      </div>
+
+      {/* Estatísticas */}
+      <div className="mb-4">
+        <p className="text-sm text-gray-500">
+          Total de <span className="font-semibold text-gray-700">{clientesFiltrados.length}</span> clientes {termoBusca || filtroEtapa !== 'todas' ? 'encontrados' : 'distribuídos em ' + colunas.length + ' etapas'}
+        </p>
       </div>
 
       {/* Formulário para adicionar nova coluna */}
