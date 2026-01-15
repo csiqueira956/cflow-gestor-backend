@@ -550,15 +550,12 @@ const Kanban = ({ clienteIdParaAbrir, onClienteAberto }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-primary-50 to-accent-50 p-6">
+    <div className="p-4">
       {/* Cabeçalho com ações */}
-      <div className="mb-6 flex justify-between items-center backdrop-blur-sm bg-white/70 p-6 rounded-2xl shadow-lg border border-white/50">
+      <div className="mb-6 flex justify-between items-center backdrop-blur-sm bg-white/70 p-4 rounded-2xl shadow-lg border border-white/50">
         <div>
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent">
-            Funil de Vendas
-          </h2>
-          <p className="text-gray-600 mt-2 font-medium">
-            Total de {clientesFiltrados.length} clientes {termoBusca || filtroEtapa !== 'todas' ? 'encontrados' : 'distribuídos em ' + colunas.length + ' etapas'}
+          <p className="text-gray-600 font-medium">
+            Total de <span className="font-bold text-primary-600">{clientesFiltrados.length}</span> clientes {termoBusca || filtroEtapa !== 'todas' ? 'encontrados' : 'distribuídos em ' + colunas.length + ' etapas'}
           </p>
         </div>
         <div className="flex gap-3">
