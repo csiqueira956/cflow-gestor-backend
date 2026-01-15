@@ -79,7 +79,7 @@ const TermosDeUso = () => {
 
             <h3 className="text-xl font-semibold text-gray-800 mb-3 mt-4">5.1 Propriedade do Software</h3>
             <p className="text-gray-700 mb-4">
-              O Sistema e todo seu conteúdo são propriedade de CFLOW Gestor de Consórcio e estão protegidos por leis de direitos autorais.
+              O Sistema e todo seu conteúdo são propriedade de Cflow CRM e estão protegidos por leis de direitos autorais.
             </p>
 
             <h3 className="text-xl font-semibold text-gray-800 mb-3 mt-4">5.2 Seus Dados</h3>
