@@ -1,7 +1,87 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, memo } from 'react';
 import toast from 'react-hot-toast';
 import { clientesAPI } from '../api/api';
 import AtividadesCliente from './AtividadesCliente';
+
+// Funções de formatação (fora do componente)
+const formatarCPF = (cpf) => {
+  if (!cpf) return 'Não informado';
+  return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+};
+
+const formatarCEP = (cep) => {
+  if (!cep) return 'Não informado';
+  return cep.replace(/(\d{5})(\d{3})/, '$1-$2');
+};
+
+const formatarTelefone = (telefone) => {
+  if (!telefone) return 'Não informado';
+  return telefone;
+};
+
+const formatarData = (data) => {
+  if (!data) return 'Não informado';
+  const d = new Date(data);
+  return d.toLocaleDateString('pt-BR');
+};
+
+const formatarValor = (valor) => {
+  if (!valor) return 'Não informado';
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(valor);
+};
+
+// Componente CampoEditavel (fora do componente principal para evitar re-render)
+const CampoEditavel = memo(({ label, campo, valor, tipo = 'text', opcoes = null, modoEdicao, dadosEditados, onChange }) => {
+  const getValorFormatado = () => {
+    if (tipo === 'date') return formatarData(valor);
+    if (campo === 'cpf') return formatarCPF(valor);
+    if (campo === 'cep') return formatarCEP(valor);
+    if (campo.includes('telefone')) return formatarTelefone(valor);
+    if (campo.includes('valor') || campo === 'remuneracao') return formatarValor(valor);
+    return valor || 'Não informado';
+  };
+
+  return (
+    <div>
+      <span className="text-sm font-medium text-gray-500">{label}</span>
+      {modoEdicao ? (
+        opcoes ? (
+          <select
+            value={dadosEditados[campo] || ''}
+            onChange={(e) => onChange(campo, e.target.value)}
+            className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="">Selecione...</option>
+            {opcoes.map((op) => (
+              <option key={op.value} value={op.value}>{op.label}</option>
+            ))}
+          </select>
+        ) : tipo === 'textarea' ? (
+          <textarea
+            value={dadosEditados[campo] || ''}
+            onChange={(e) => onChange(campo, e.target.value)}
+            rows={3}
+            className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          />
+        ) : (
+          <input
+            type={tipo}
+            value={dadosEditados[campo] || ''}
+            onChange={(e) => onChange(campo, e.target.value)}
+            className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          />
+        )
+      ) : (
+        <p className="text-gray-900">{getValorFormatado()}</p>
+      )}
+    </div>
+  );
+});
+
+CampoEditavel.displayName = 'CampoEditavel';
 
 const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
   const [modoEdicao, setModoEdicao] = useState(false);
@@ -52,44 +132,10 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
     setModoEdicao(false);
   };
 
-  // Função auxiliar para atualizar campo
-  const handleChange = (campo, valor) => {
-    setDadosEditados({ ...dadosEditados, [campo]: valor });
-  };
-
-  // Formatar CPF
-  const formatarCPF = (cpf) => {
-    if (!cpf) return 'Não informado';
-    return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  };
-
-  // Formatar CEP
-  const formatarCEP = (cep) => {
-    if (!cep) return 'Não informado';
-    return cep.replace(/(\d{5})(\d{3})/, '$1-$2');
-  };
-
-  // Formatar telefone
-  const formatarTelefone = (telefone) => {
-    if (!telefone) return 'Não informado';
-    return telefone;
-  };
-
-  // Formatar data
-  const formatarData = (data) => {
-    if (!data) return 'Não informado';
-    const d = new Date(data);
-    return d.toLocaleDateString('pt-BR');
-  };
-
-  // Formatar valor
-  const formatarValor = (valor) => {
-    if (!valor) return 'Não informado';
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(valor);
-  };
+  // Função auxiliar para atualizar campo (useCallback para evitar re-renders)
+  const handleChange = useCallback((campo, valor) => {
+    setDadosEditados(prev => ({ ...prev, [campo]: valor }));
+  }, []);
 
   // Mapa de etapas
   const etapasNomes = {
@@ -101,49 +147,15 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
     perdido: 'Perdido',
   };
 
-  // Componente de campo editável
-  const CampoEditavel = ({ label, campo, valor, tipo = 'text', opcoes = null }) => (
-    <div>
-      <span className="text-sm font-medium text-gray-500">{label}</span>
-      {modoEdicao ? (
-        opcoes ? (
-          <select
-            value={dadosEditados[campo] || ''}
-            onChange={(e) => handleChange(campo, e.target.value)}
-            className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          >
-            <option value="">Selecione...</option>
-            {opcoes.map((op) => (
-              <option key={op.value} value={op.value}>{op.label}</option>
-            ))}
-          </select>
-        ) : tipo === 'textarea' ? (
-          <textarea
-            value={dadosEditados[campo] || ''}
-            onChange={(e) => handleChange(campo, e.target.value)}
-            rows={3}
-            className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          />
-        ) : (
-          <input
-            type={tipo}
-            value={dadosEditados[campo] || ''}
-            onChange={(e) => handleChange(campo, e.target.value)}
-            className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          />
-        )
-      ) : (
-        <p className="text-gray-900">
-          {tipo === 'date' ? formatarData(valor) :
-           campo === 'cpf' ? formatarCPF(valor) :
-           campo === 'cep' ? formatarCEP(valor) :
-           campo.includes('telefone') ? formatarTelefone(valor) :
-           campo.includes('valor') || campo === 'remuneracao' ? formatarValor(valor) :
-           valor || 'Não informado'}
-        </p>
-      )}
-    </div>
-  );
+  // Wrapper para CampoEditavel com props comuns
+  const Campo = useCallback((props) => (
+    <CampoEditavel
+      {...props}
+      modoEdicao={modoEdicao}
+      dadosEditados={dadosEditados}
+      onChange={handleChange}
+    />
+  ), [modoEdicao, dadosEditados, handleChange]);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" onClick={onClose}>
@@ -256,11 +268,11 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
                   Dados Básicos
                 </h3>
                 <div className="space-y-3">
-                  <CampoEditavel label="Nome Completo" campo="nome" valor={cliente.nome} />
-                  <CampoEditavel label="CPF" campo="cpf" valor={cliente.cpf} />
-                  <CampoEditavel label="Email" campo="email" valor={cliente.email} tipo="email" />
-                  <CampoEditavel label="Telefone" campo="telefone" valor={cliente.telefone} />
-                  <CampoEditavel
+                  <Campo label="Nome Completo" campo="nome" valor={cliente.nome} />
+                  <Campo label="CPF" campo="cpf" valor={cliente.cpf} />
+                  <Campo label="Email" campo="email" valor={cliente.email} tipo="email" />
+                  <Campo label="Telefone" campo="telefone" valor={cliente.telefone} />
+                  <Campo
                     label="Etapa"
                     campo="etapa"
                     valor={etapasNomes[cliente.etapa] || cliente.etapa}
@@ -282,8 +294,8 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
                   Dados Pessoais
                 </h3>
                 <div className="space-y-3">
-                  <CampoEditavel label="Data de Nascimento" campo="data_nascimento" valor={cliente.data_nascimento} tipo="date" />
-                  <CampoEditavel
+                  <Campo label="Data de Nascimento" campo="data_nascimento" valor={cliente.data_nascimento} tipo="date" />
+                  <Campo
                     label="Estado Civil"
                     campo="estado_civil"
                     valor={cliente.estado_civil}
@@ -295,11 +307,11 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
                       { value: 'União Estável', label: 'União Estável' },
                     ]}
                   />
-                  <CampoEditavel label="Nacionalidade" campo="nacionalidade" valor={cliente.nacionalidade} />
-                  <CampoEditavel label="Cidade de Nascimento" campo="cidade_nascimento" valor={cliente.cidade_nascimento} />
-                  <CampoEditavel label="Nome da Mãe" campo="nome_mae" valor={cliente.nome_mae} />
-                  <CampoEditavel label="Profissão" campo="profissao" valor={cliente.profissao} />
-                  <CampoEditavel label="Remuneração" campo="remuneracao" valor={cliente.remuneracao} tipo="number" />
+                  <Campo label="Nacionalidade" campo="nacionalidade" valor={cliente.nacionalidade} />
+                  <Campo label="Cidade de Nascimento" campo="cidade_nascimento" valor={cliente.cidade_nascimento} />
+                  <Campo label="Nome da Mãe" campo="nome_mae" valor={cliente.nome_mae} />
+                  <Campo label="Profissão" campo="profissao" valor={cliente.profissao} />
+                  <Campo label="Remuneração" campo="remuneracao" valor={cliente.remuneracao} tipo="number" />
                 </div>
               </div>
 
@@ -309,10 +321,10 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
                   Telefones
                 </h3>
                 <div className="space-y-3">
-                  <CampoEditavel label="Residencial" campo="telefone_residencial" valor={cliente.telefone_residencial} />
-                  <CampoEditavel label="Comercial" campo="telefone_comercial" valor={cliente.telefone_comercial} />
-                  <CampoEditavel label="Celular 1" campo="telefone_celular" valor={cliente.telefone_celular} />
-                  <CampoEditavel label="Celular 2" campo="telefone_celular_2" valor={cliente.telefone_celular_2} />
+                  <Campo label="Residencial" campo="telefone_residencial" valor={cliente.telefone_residencial} />
+                  <Campo label="Comercial" campo="telefone_comercial" valor={cliente.telefone_comercial} />
+                  <Campo label="Celular 1" campo="telefone_celular" valor={cliente.telefone_celular} />
+                  <Campo label="Celular 2" campo="telefone_celular_2" valor={cliente.telefone_celular_2} />
                 </div>
               </div>
 
@@ -322,7 +334,7 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
                   Documentos
                 </h3>
                 <div className="space-y-3">
-                  <CampoEditavel
+                  <Campo
                     label="Tipo de Documento"
                     campo="tipo_documento"
                     valor={cliente.tipo_documento}
@@ -332,9 +344,9 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
                       { value: 'Passaporte', label: 'Passaporte' },
                     ]}
                   />
-                  <CampoEditavel label="Número do Documento" campo="numero_documento" valor={cliente.numero_documento} />
-                  <CampoEditavel label="Órgão Emissor" campo="orgao_emissor" valor={cliente.orgao_emissor} />
-                  <CampoEditavel label="Data de Emissão" campo="data_emissao" valor={cliente.data_emissao} tipo="date" />
+                  <Campo label="Número do Documento" campo="numero_documento" valor={cliente.numero_documento} />
+                  <Campo label="Órgão Emissor" campo="orgao_emissor" valor={cliente.orgao_emissor} />
+                  <Campo label="Data de Emissão" campo="data_emissao" valor={cliente.data_emissao} tipo="date" />
                 </div>
               </div>
 
@@ -344,8 +356,8 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
                   Dados do Cônjuge
                 </h3>
                 <div className="space-y-3">
-                  <CampoEditavel label="CPF do Cônjuge" campo="cpf_conjuge" valor={cliente.cpf_conjuge} />
-                  <CampoEditavel label="Nome do Cônjuge" campo="nome_conjuge" valor={cliente.nome_conjuge} />
+                  <Campo label="CPF do Cônjuge" campo="cpf_conjuge" valor={cliente.cpf_conjuge} />
+                  <Campo label="Nome do Cônjuge" campo="nome_conjuge" valor={cliente.nome_conjuge} />
                 </div>
               </div>
 
@@ -355,10 +367,10 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
                   Informações do Consórcio
                 </h3>
                 <div className="space-y-3">
-                  <CampoEditavel label="Valor da Carta" campo="valor_carta" valor={cliente.valor_carta} tipo="number" />
-                  <CampoEditavel label="Administradora" campo="administradora" valor={cliente.administradora} />
-                  <CampoEditavel label="Grupo" campo="grupo" valor={cliente.grupo} />
-                  <CampoEditavel label="Cota" campo="cota" valor={cliente.cota} />
+                  <Campo label="Valor da Carta" campo="valor_carta" valor={cliente.valor_carta} tipo="number" />
+                  <Campo label="Administradora" campo="administradora" valor={cliente.administradora} />
+                  <Campo label="Grupo" campo="grupo" valor={cliente.grupo} />
+                  <Campo label="Cota" campo="cota" valor={cliente.cota} />
                   <div>
                     <span className="text-sm font-medium text-gray-500">Aceita Seguro</span>
                     {modoEdicao ? (
@@ -383,8 +395,8 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
                   Endereço
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <CampoEditavel label="CEP" campo="cep" valor={cliente.cep} />
-                  <CampoEditavel
+                  <Campo label="CEP" campo="cep" valor={cliente.cep} />
+                  <Campo
                     label="Tipo de Logradouro"
                     campo="tipo_logradouro"
                     valor={cliente.tipo_logradouro}
@@ -397,12 +409,12 @@ const ClienteModal = ({ cliente, onClose, onAtualizar, onDelete }) => {
                       { value: 'Estrada', label: 'Estrada' },
                     ]}
                   />
-                  <CampoEditavel label="Endereço" campo="endereco" valor={cliente.endereco} />
-                  <CampoEditavel label="Número" campo="numero_endereco" valor={cliente.numero_endereco} />
-                  <CampoEditavel label="Complemento" campo="complemento" valor={cliente.complemento} />
-                  <CampoEditavel label="Bairro" campo="bairro" valor={cliente.bairro} />
-                  <CampoEditavel label="Cidade" campo="cidade" valor={cliente.cidade} />
-                  <CampoEditavel
+                  <Campo label="Endereço" campo="endereco" valor={cliente.endereco} />
+                  <Campo label="Número" campo="numero_endereco" valor={cliente.numero_endereco} />
+                  <Campo label="Complemento" campo="complemento" valor={cliente.complemento} />
+                  <Campo label="Bairro" campo="bairro" valor={cliente.bairro} />
+                  <Campo label="Cidade" campo="cidade" valor={cliente.cidade} />
+                  <Campo
                     label="Estado"
                     campo="estado"
                     valor={cliente.estado}
