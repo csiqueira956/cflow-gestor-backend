@@ -16,6 +16,7 @@ import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import billingRoutes from './routes/billingRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import adminAssinaturaRoutes from './routes/adminAssinaturaRoutes.js';
+import atividadeRoutes from './routes/atividadeRoutes.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 
 // Configuração de variáveis de ambiente
@@ -47,6 +48,7 @@ app.use('/api/equipes', equipeRoutes);
 app.use('/api/administradoras', administradoraRoutes);
 app.use('/api/metas', metaRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/atividades', atividadeRoutes);
 
 // Rotas SaaS (planos, assinaturas, billing)
 app.use('/api/plans', planRoutes);

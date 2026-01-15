@@ -940,6 +940,235 @@ app.delete('/api/clientes/:id', async (req, res) => {
 });
 
 // ============================================
+// ROTAS DE ATIVIDADES/FOLLOW-UPS
+// ============================================
+
+// Listar atividades de um cliente
+app.get('/api/atividades/cliente/:clienteId', async (req, res) => {
+  try {
+    const { clienteId } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    const result = await pool.query(`
+      SELECT
+        a.*,
+        u.nome as usuario_nome
+      FROM atividades a
+      JOIN usuarios u ON a.usuario_id = u.id
+      WHERE a.cliente_id = $1 AND a.company_id = $2
+      ORDER BY a.data_atividade DESC
+    `, [clienteId, decoded.company_id]);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Erro ao listar atividades:', error);
+    res.status(500).json({ error: 'Erro ao listar atividades', message: error.message });
+  }
+});
+
+// Criar nova atividade
+app.post('/api/atividades/cliente/:clienteId', async (req, res) => {
+  try {
+    const { clienteId } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { tipo, titulo, descricao, resultado, proximo_followup, data_atividade } = req.body;
+
+    // Validação
+    if (!tipo || !titulo) {
+      return res.status(400).json({ error: 'Tipo e título são obrigatórios' });
+    }
+
+    const tiposValidos = ['ligacao', 'email', 'whatsapp', 'visita', 'reuniao', 'proposta', 'outro'];
+    if (!tiposValidos.includes(tipo)) {
+      return res.status(400).json({ error: 'Tipo de atividade inválido', tiposValidos });
+    }
+
+    const result = await pool.query(`
+      INSERT INTO atividades (
+        cliente_id, usuario_id, company_id,
+        tipo, titulo, descricao, resultado,
+        proximo_followup, data_atividade
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, NOW()))
+      RETURNING *
+    `, [
+      clienteId,
+      decoded.id,
+      decoded.company_id,
+      tipo,
+      titulo,
+      descricao || null,
+      resultado || 'pendente',
+      proximo_followup || null,
+      data_atividade || null
+    ]);
+
+    // Atualizar ultimo_followup no cliente
+    await pool.query(
+      `UPDATE clientes SET ultimo_followup = NOW() WHERE id = $1 AND company_id = $2`,
+      [clienteId, decoded.company_id]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Atividade registrada com sucesso',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Erro ao criar atividade:', error);
+    res.status(500).json({ error: 'Erro ao criar atividade', message: error.message });
+  }
+});
+
+// Atualizar atividade
+app.put('/api/atividades/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { tipo, titulo, descricao, resultado, proximo_followup, data_atividade } = req.body;
+
+    const result = await pool.query(`
+      UPDATE atividades
+      SET
+        tipo = COALESCE($1, tipo),
+        titulo = COALESCE($2, titulo),
+        descricao = $3,
+        resultado = COALESCE($4, resultado),
+        proximo_followup = $5,
+        data_atividade = COALESCE($6, data_atividade)
+      WHERE id = $7 AND company_id = $8
+      RETURNING *
+    `, [tipo, titulo, descricao, resultado, proximo_followup || null, data_atividade, id, decoded.company_id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Atividade não encontrada' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Atividade atualizada com sucesso',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar atividade:', error);
+    res.status(500).json({ error: 'Erro ao atualizar atividade', message: error.message });
+  }
+});
+
+// Deletar atividade
+app.delete('/api/atividades/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    const result = await pool.query(
+      'DELETE FROM atividades WHERE id = $1 AND company_id = $2 RETURNING *',
+      [id, decoded.company_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Atividade não encontrada' });
+    }
+
+    res.json({ success: true, message: 'Atividade excluída com sucesso' });
+  } catch (error) {
+    console.error('Erro ao deletar atividade:', error);
+    res.status(500).json({ error: 'Erro ao deletar atividade', message: error.message });
+  }
+});
+
+// Listar próximos follow-ups
+app.get('/api/atividades/followups/proximos', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { dias = 7 } = req.query;
+
+    const result = await pool.query(`
+      SELECT
+        a.*,
+        u.nome as usuario_nome,
+        c.nome as cliente_nome,
+        c.telefone_celular as cliente_telefone,
+        c.etapa as cliente_etapa
+      FROM atividades a
+      JOIN usuarios u ON a.usuario_id = u.id
+      JOIN clientes c ON a.cliente_id = c.id
+      WHERE a.company_id = $1
+        AND a.proximo_followup IS NOT NULL
+        AND a.proximo_followup <= NOW() + INTERVAL '${parseInt(dias)} days'
+        AND a.proximo_followup >= NOW()
+      ORDER BY a.proximo_followup ASC
+    `, [decoded.company_id]);
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Erro ao listar próximos follow-ups:', error);
+    res.status(500).json({ error: 'Erro ao listar próximos follow-ups', message: error.message });
+  }
+});
+
+// Listar follow-ups atrasados
+app.get('/api/atividades/followups/atrasados', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    const result = await pool.query(`
+      SELECT
+        a.*,
+        u.nome as usuario_nome,
+        c.nome as cliente_nome,
+        c.telefone_celular as cliente_telefone,
+        c.etapa as cliente_etapa
+      FROM atividades a
+      JOIN usuarios u ON a.usuario_id = u.id
+      JOIN clientes c ON a.cliente_id = c.id
+      WHERE a.company_id = $1
+        AND a.proximo_followup IS NOT NULL
+        AND a.proximo_followup < NOW()
+      ORDER BY a.proximo_followup ASC
+    `, [decoded.company_id]);
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Erro ao listar follow-ups atrasados:', error);
+    res.status(500).json({ error: 'Erro ao listar follow-ups atrasados', message: error.message });
+  }
+});
+
+// ============================================
 // ROTAS DE COMISSÕES (REAL)
 // ============================================
 

@@ -57,6 +57,16 @@ export const clientesAPI = {
   estatisticas: () => api.get('/clientes/estatisticas'),
 };
 
+// Funções de atividades/follow-ups
+export const atividadesAPI = {
+  listar: (clienteId) => api.get(`/atividades/cliente/${clienteId}`),
+  criar: (clienteId, atividadeData) => api.post(`/atividades/cliente/${clienteId}`, atividadeData),
+  atualizar: (id, atividadeData) => api.put(`/atividades/${id}`, atividadeData),
+  deletar: (id) => api.delete(`/atividades/${id}`),
+  proximosFollowups: (dias = 7) => api.get('/atividades/followups/proximos', { params: { dias } }),
+  followupsAtrasados: () => api.get('/atividades/followups/atrasados'),
+};
+
 // Funções de usuários (admin)
 export const usuariosAPI = {
   listarVendedores: () => api.get('/usuarios/vendedores'),

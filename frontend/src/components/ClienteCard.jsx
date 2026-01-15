@@ -128,6 +128,22 @@ const ClienteCard = ({ cliente, index, cor, onClickDetalhes }) => {
             </p>
           </div>
 
+          {/* Último Follow-up */}
+          <div className="mt-2 flex items-center gap-1">
+            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {cliente.ultimo_followup ? (
+              <p className="text-xs text-gray-500">
+                Último contato: <span className="font-medium">{formatarData(cliente.ultimo_followup)}</span>
+              </p>
+            ) : (
+              <p className="text-xs text-orange-500 font-medium">
+                Sem registro de contato
+              </p>
+            )}
+          </div>
+
           {/* Botão para ver mais detalhes */}
           <button
             onClick={(e) => {

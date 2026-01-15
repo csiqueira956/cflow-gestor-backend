@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { clientesAPI } from '../api/api';
+import AtividadesCliente from './AtividadesCliente';
 
 const ClienteModal = ({ cliente, onClose, onAtualizar }) => {
   const [modoEdicao, setModoEdicao] = useState(false);
@@ -435,6 +436,13 @@ const ClienteModal = ({ cliente, onClose, onAtualizar }) => {
                 )}
               </div>
             </div>
+
+            {/* Atividades / Follow-ups */}
+            {!modoEdicao && (
+              <div className="mt-6">
+                <AtividadesCliente clienteId={cliente.id} clienteNome={cliente.nome} />
+              </div>
+            )}
           </div>
 
           {/* Rodapé */}
