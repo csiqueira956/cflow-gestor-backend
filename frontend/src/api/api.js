@@ -186,6 +186,9 @@ export const superAdminAPI = {
   listarUsuariosOnline: (minutes = 5) => api.get('/admin/sessions/online', { params: { minutes } }),
   estatisticasSessoes: (days = 7) => api.get('/admin/sessions/stats', { params: { days } }),
   historicoSessoesUsuario: (userId, limit = 20) => api.get(`/admin/sessions/user/${userId}`, { params: { limit } }),
+
+  // Dashboard Super Admin
+  dashboard: () => api.get('/admin/dashboard'),
 };
 
 export default api;

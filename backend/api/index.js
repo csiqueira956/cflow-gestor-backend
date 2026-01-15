@@ -2885,6 +2885,151 @@ app.get('/api/admin/sessions/user/:userId', verifySuperAdmin, async (req, res) =
 });
 
 // ============================================
+// DASHBOARD DO SUPER ADMIN
+// ============================================
+
+// Estatísticas gerais do sistema
+app.get('/api/admin/dashboard', verifySuperAdmin, async (req, res) => {
+  try {
+    // Total de empresas e status
+    const empresasStats = await pool.query(`
+      SELECT
+        COUNT(*) as total,
+        COUNT(CASE WHEN s.status = 'active' THEN 1 END) as ativas,
+        COUNT(CASE WHEN s.status = 'trial' THEN 1 END) as trial,
+        COUNT(CASE WHEN s.status = 'cancelled' OR s.status = 'suspended' THEN 1 END) as inativas
+      FROM companies c
+      LEFT JOIN subscriptions s ON c.id = s.company_id
+    `);
+
+    // Total de usuários
+    const usuariosStats = await pool.query(`
+      SELECT
+        COUNT(*) as total,
+        COUNT(CASE WHEN role = 'admin' THEN 1 END) as admins,
+        COUNT(CASE WHEN role = 'gerente' THEN 1 END) as gerentes,
+        COUNT(CASE WHEN role = 'vendedor' THEN 1 END) as vendedores
+      FROM usuarios
+      WHERE role != 'super_admin'
+    `);
+
+    // Usuários online agora (últimos 5 minutos)
+    const onlineAgora = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM usuarios
+      WHERE last_activity > NOW() - INTERVAL '5 minutes'
+      AND role != 'super_admin'
+    `);
+
+    // MRR (Monthly Recurring Revenue)
+    const mrrResult = await pool.query(`
+      SELECT COALESCE(SUM(p.price), 0) as mrr
+      FROM subscriptions s
+      JOIN plans p ON s.plan_id = p.id
+      WHERE s.status = 'active'
+    `);
+
+    // Empresas por plano
+    const empresasPorPlano = await pool.query(`
+      SELECT
+        p.name as plano,
+        p.price,
+        COUNT(s.id) as quantidade
+      FROM plans p
+      LEFT JOIN subscriptions s ON p.id = s.plan_id AND s.status IN ('active', 'trial')
+      WHERE p.active = true
+      GROUP BY p.id, p.name, p.price
+      ORDER BY p.price ASC
+    `);
+
+    // Novas empresas nos últimos 30 dias (por semana)
+    const novasEmpresasPorSemana = await pool.query(`
+      SELECT
+        DATE_TRUNC('week', created_at) as semana,
+        COUNT(*) as quantidade
+      FROM companies
+      WHERE created_at > NOW() - INTERVAL '30 days'
+      GROUP BY DATE_TRUNC('week', created_at)
+      ORDER BY semana DESC
+    `);
+
+    // Últimas 5 empresas cadastradas
+    const ultimasEmpresas = await pool.query(`
+      SELECT
+        c.id, c.nome, c.email, c.created_at,
+        p.name as plano,
+        s.status as status_assinatura
+      FROM companies c
+      LEFT JOIN subscriptions s ON c.id = s.company_id
+      LEFT JOIN plans p ON s.plan_id = p.id
+      ORDER BY c.created_at DESC
+      LIMIT 5
+    `);
+
+    // Empresas com assinatura expirando em 7 dias
+    const expirandoEm7Dias = await pool.query(`
+      SELECT
+        c.id, c.nome, c.email,
+        s.current_period_end,
+        p.name as plano
+      FROM companies c
+      JOIN subscriptions s ON c.id = s.company_id
+      LEFT JOIN plans p ON s.plan_id = p.id
+      WHERE s.status = 'active'
+      AND s.current_period_end BETWEEN NOW() AND NOW() + INTERVAL '7 days'
+      ORDER BY s.current_period_end ASC
+    `);
+
+    // Sessões hoje
+    const sessoesHoje = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM user_sessions
+      WHERE DATE(login_at) = CURRENT_DATE
+    `);
+
+    // Crescimento mensal (empresas novas este mês vs mês passado)
+    const crescimentoMensal = await pool.query(`
+      SELECT
+        COUNT(CASE WHEN created_at >= DATE_TRUNC('month', NOW()) THEN 1 END) as este_mes,
+        COUNT(CASE WHEN created_at >= DATE_TRUNC('month', NOW() - INTERVAL '1 month')
+                   AND created_at < DATE_TRUNC('month', NOW()) THEN 1 END) as mes_passado
+      FROM companies
+    `);
+
+    const esteMes = parseInt(crescimentoMensal.rows[0].este_mes) || 0;
+    const mesPassado = parseInt(crescimentoMensal.rows[0].mes_passado) || 1;
+    const crescimentoPercentual = mesPassado > 0
+      ? Math.round(((esteMes - mesPassado) / mesPassado) * 100)
+      : 0;
+
+    res.json({
+      resumo: {
+        totalEmpresas: parseInt(empresasStats.rows[0].total) || 0,
+        empresasAtivas: parseInt(empresasStats.rows[0].ativas) || 0,
+        empresasTrial: parseInt(empresasStats.rows[0].trial) || 0,
+        empresasInativas: parseInt(empresasStats.rows[0].inativas) || 0,
+        totalUsuarios: parseInt(usuariosStats.rows[0].total) || 0,
+        admins: parseInt(usuariosStats.rows[0].admins) || 0,
+        gerentes: parseInt(usuariosStats.rows[0].gerentes) || 0,
+        vendedores: parseInt(usuariosStats.rows[0].vendedores) || 0,
+        usuariosOnline: parseInt(onlineAgora.rows[0].count) || 0,
+        mrr: parseFloat(mrrResult.rows[0].mrr) || 0,
+        sessoesHoje: parseInt(sessoesHoje.rows[0].count) || 0,
+        crescimentoMensal: crescimentoPercentual
+      },
+      empresasPorPlano: empresasPorPlano.rows,
+      novasEmpresasPorSemana: novasEmpresasPorSemana.rows,
+      ultimasEmpresas: ultimasEmpresas.rows,
+      expirandoEm7Dias: expirandoEm7Dias.rows
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar dashboard:', error);
+    res.status(500).json({ error: 'Erro ao buscar estatísticas do dashboard' });
+  }
+});
+
+// ============================================
 // ROTAS DE BILLING (INTEGRAÇÃO ASAAS)
 // ============================================
 
