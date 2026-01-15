@@ -560,7 +560,7 @@ const Signup = () => {
         <div className="flex flex-col items-center mb-8">
           <Logo className="w-16 h-16 mb-4" showText={false} />
           <h1 className="text-3xl font-bold text-gray-900 mb-2 font-['Poppins']">
-            Cflow CRM
+            Cflow <span className="text-xl">CRM</span>
           </h1>
           <p className="text-gray-600">Comece seu teste grátis de 14 dias</p>
         </div>

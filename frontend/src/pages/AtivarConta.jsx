@@ -131,7 +131,7 @@ const AtivarConta = () => {
       <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Cflow CRM</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Cflow <span className="text-xl">CRM</span></h1>
           <p className="text-gray-600 mt-2">Ative sua conta trial de 14 dias</p>
         </div>
 
