@@ -208,4 +208,18 @@ export const superAdminAPI = {
   exportFinanceiro: () => api.get('/admin/export/financeiro', { responseType: 'blob' }),
 };
 
+// Funções do Simulador de Consórcio
+export const simuladorAPI = {
+  // Taxas
+  listarTaxas: () => api.get('/simulador/taxas'),
+  salvarTaxa: (taxaData) => api.post('/simulador/taxas', taxaData),
+  deletarTaxa: (id) => api.delete(`/simulador/taxas/${id}`),
+
+  // Simulação
+  calcular: (dados) => api.post('/simulador/calcular', dados),
+
+  // Criar lead a partir da simulação
+  criarLead: (leadData) => api.post('/simulador/criar-lead', leadData),
+};
+
 export default api;

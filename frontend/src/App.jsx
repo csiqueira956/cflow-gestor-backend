@@ -23,6 +23,7 @@ import Equipes from './pages/configuracoes/Equipes';
 import Administradoras from './pages/configuracoes/Administradoras';
 import Metas from './pages/configuracoes/Metas';
 import SuperAdminPanel from './pages/SuperAdminPanel';
+import Simulador from './pages/Simulador';
 
 // Componente para rotas protegidas
 const ProtectedRoute = ({ children }) => {
@@ -236,6 +237,15 @@ function AppRoutes() {
             <RoleProtectedRoute allowedRoles={['admin', 'gerente', 'super_admin']}>
               <Metas />
             </RoleProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/simulador"
+          element={
+            <ProtectedRoute>
+              <Simulador />
+            </ProtectedRoute>
           }
         />
 
