@@ -1620,6 +1620,77 @@ app.get('/api/usuarios', async (req, res) => {
   }
 });
 
+// Criar usuário (apenas admin)
+app.post('/api/usuarios', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    // Verificar se é admin
+    if (decoded.role !== 'admin' && decoded.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem criar usuários.' });
+    }
+
+    const companyId = decoded.company_id;
+    if (!companyId && decoded.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const { nome, email, senha, role, tipo_usuario, percentual_comissao, celular, equipe, equipe_id } = req.body;
+
+    // Validações
+    if (!nome || !email || !senha) {
+      return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+    }
+
+    if (senha.length < 6) {
+      return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres' });
+    }
+
+    // Verificar se o email já existe
+    const emailCheck = await pool.query('SELECT id FROM usuarios WHERE email = $1', [email]);
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'Este email já está cadastrado' });
+    }
+
+    // Hash da senha
+    const senhaHash = await bcrypt.hash(senha, 10);
+
+    // Gerar link público único se for vendedor
+    const linkPublico = (role || 'vendedor') === 'vendedor' ? require('crypto').randomBytes(16).toString('hex') : null;
+
+    // Criar novo usuário
+    const result = await pool.query(`
+      INSERT INTO usuarios (nome, email, senha_hash, role, tipo_usuario, percentual_comissao, celular, equipe_id, link_publico, company_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, link_publico, company_id, created_at
+    `, [
+      nome,
+      email,
+      senhaHash,
+      role || 'vendedor',
+      tipo_usuario,
+      percentual_comissao,
+      celular,
+      equipe_id ? parseInt(equipe_id, 10) : (equipe ? parseInt(equipe, 10) : null),
+      linkPublico,
+      companyId
+    ]);
+
+    res.status(201).json({
+      message: 'Usuário criado com sucesso',
+      usuario: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Erro ao criar usuário:', error);
+    res.status(500).json({ error: 'Erro ao criar usuário' });
+  }
+});
+
 // Listar vendedores
 app.get('/api/usuarios/vendedores', async (req, res) => {
   try {
@@ -3232,6 +3303,243 @@ app.get('/api/admin/dashboard', verifySuperAdmin, async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ error: 'Erro ao buscar estatísticas do dashboard' });
+  }
+});
+
+// Histórico de MRR (últimos 12 meses)
+app.get('/api/admin/dashboard/mrr-history', verifySuperAdmin, async (req, res) => {
+  try {
+    const mrrHistory = await pool.query(`
+      WITH months AS (
+        SELECT generate_series(
+          DATE_TRUNC('month', NOW() - INTERVAL '11 months'),
+          DATE_TRUNC('month', NOW()),
+          '1 month'::interval
+        ) as mes
+      ),
+      mrr_por_mes AS (
+        SELECT
+          DATE_TRUNC('month', s.created_at) as mes,
+          SUM(p.price) as mrr_adicionado
+        FROM subscriptions s
+        JOIN plans p ON s.plan_id = p.id
+        WHERE s.status IN ('active', 'trial')
+        GROUP BY DATE_TRUNC('month', s.created_at)
+      )
+      SELECT
+        TO_CHAR(m.mes, 'YYYY-MM') as mes,
+        TO_CHAR(m.mes, 'Mon/YY') as mes_label,
+        COALESCE(mrr.mrr_adicionado, 0) as mrr
+      FROM months m
+      LEFT JOIN mrr_por_mes mrr ON m.mes = mrr.mes
+      ORDER BY m.mes ASC
+    `);
+
+    // MRR atual (acumulado)
+    const mrrAtual = await pool.query(`
+      SELECT COALESCE(SUM(p.price), 0) as mrr_total
+      FROM subscriptions s
+      JOIN plans p ON s.plan_id = p.id
+      WHERE s.status = 'active'
+    `);
+
+    // Calcular MRR acumulado mês a mês
+    let mrrAcumulado = 0;
+    const historicoComAcumulado = mrrHistory.rows.map(row => {
+      mrrAcumulado += parseFloat(row.mrr) || 0;
+      return {
+        mes: row.mes,
+        mes_label: row.mes_label,
+        mrr_novo: parseFloat(row.mrr) || 0,
+        mrr_acumulado: mrrAcumulado
+      };
+    });
+
+    res.json({
+      historico: historicoComAcumulado,
+      mrr_atual: parseFloat(mrrAtual.rows[0].mrr_total) || 0
+    });
+  } catch (error) {
+    console.error('Erro ao buscar histórico MRR:', error);
+    res.status(500).json({ error: 'Erro ao buscar histórico de MRR' });
+  }
+});
+
+// Export de empresas (CSV)
+app.get('/api/admin/export/empresas', verifySuperAdmin, async (req, res) => {
+  try {
+    const { format = 'csv' } = req.query;
+
+    const empresas = await pool.query(`
+      SELECT
+        c.id,
+        c.nome as empresa,
+        c.email,
+        c.cnpj,
+        c.created_at as data_cadastro,
+        p.name as plano,
+        p.price as valor_plano,
+        s.status as status_assinatura,
+        s.current_period_start as inicio_periodo,
+        s.current_period_end as fim_periodo,
+        (SELECT COUNT(*) FROM usuarios u WHERE u.company_id = c.id) as total_usuarios,
+        (SELECT COUNT(*) FROM clientes cl WHERE cl.company_id = c.id) as total_leads
+      FROM companies c
+      LEFT JOIN subscriptions s ON c.id = s.company_id
+      LEFT JOIN plans p ON s.plan_id = p.id
+      ORDER BY c.created_at DESC
+    `);
+
+    if (format === 'json') {
+      return res.json({ empresas: empresas.rows });
+    }
+
+    // Gerar CSV
+    const headers = ['ID', 'Empresa', 'Email', 'CNPJ', 'Data Cadastro', 'Plano', 'Valor', 'Status', 'Início Período', 'Fim Período', 'Usuários', 'Leads'];
+    const csvRows = [headers.join(';')];
+
+    empresas.rows.forEach(row => {
+      csvRows.push([
+        row.id,
+        `"${row.empresa || ''}"`,
+        row.email || '',
+        row.cnpj || '',
+        row.data_cadastro ? new Date(row.data_cadastro).toLocaleDateString('pt-BR') : '',
+        row.plano || 'Sem plano',
+        row.valor_plano ? `R$ ${parseFloat(row.valor_plano).toFixed(2)}` : 'R$ 0,00',
+        row.status_assinatura || 'N/A',
+        row.inicio_periodo ? new Date(row.inicio_periodo).toLocaleDateString('pt-BR') : '',
+        row.fim_periodo ? new Date(row.fim_periodo).toLocaleDateString('pt-BR') : '',
+        row.total_usuarios || 0,
+        row.total_leads || 0
+      ].join(';'));
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=empresas_${new Date().toISOString().split('T')[0]}.csv`);
+    res.send('\uFEFF' + csvRows.join('\n')); // BOM para Excel reconhecer UTF-8
+  } catch (error) {
+    console.error('Erro ao exportar empresas:', error);
+    res.status(500).json({ error: 'Erro ao exportar empresas' });
+  }
+});
+
+// Export de usuários (CSV)
+app.get('/api/admin/export/usuarios', verifySuperAdmin, async (req, res) => {
+  try {
+    const { format = 'csv', company_id } = req.query;
+
+    let query = `
+      SELECT
+        u.id,
+        u.nome,
+        u.email,
+        u.role,
+        u.celular,
+        u.created_at as data_cadastro,
+        c.nome as empresa,
+        e.nome as equipe
+      FROM usuarios u
+      LEFT JOIN companies c ON u.company_id = c.id
+      LEFT JOIN equipes e ON u.equipe_id = e.id
+      WHERE u.role != 'super_admin'
+    `;
+
+    const params = [];
+    if (company_id) {
+      query += ' AND u.company_id = $1';
+      params.push(company_id);
+    }
+
+    query += ' ORDER BY c.nome, u.nome';
+
+    const usuarios = await pool.query(query, params);
+
+    if (format === 'json') {
+      return res.json({ usuarios: usuarios.rows });
+    }
+
+    // Gerar CSV
+    const headers = ['ID', 'Nome', 'Email', 'Perfil', 'Celular', 'Data Cadastro', 'Empresa', 'Equipe'];
+    const csvRows = [headers.join(';')];
+
+    usuarios.rows.forEach(row => {
+      csvRows.push([
+        row.id,
+        `"${row.nome || ''}"`,
+        row.email || '',
+        row.role || '',
+        row.celular || '',
+        row.data_cadastro ? new Date(row.data_cadastro).toLocaleDateString('pt-BR') : '',
+        `"${row.empresa || ''}"`,
+        `"${row.equipe || ''}"`,
+      ].join(';'));
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=usuarios_${new Date().toISOString().split('T')[0]}.csv`);
+    res.send('\uFEFF' + csvRows.join('\n'));
+  } catch (error) {
+    console.error('Erro ao exportar usuários:', error);
+    res.status(500).json({ error: 'Erro ao exportar usuários' });
+  }
+});
+
+// Export de relatório financeiro (CSV)
+app.get('/api/admin/export/financeiro', verifySuperAdmin, async (req, res) => {
+  try {
+    const { mes, ano } = req.query;
+
+    let whereClause = '';
+    const params = [];
+
+    if (mes && ano) {
+      whereClause = `WHERE EXTRACT(MONTH FROM i.created_at) = $1 AND EXTRACT(YEAR FROM i.created_at) = $2`;
+      params.push(parseInt(mes), parseInt(ano));
+    }
+
+    const pagamentos = await pool.query(`
+      SELECT
+        i.id,
+        c.nome as empresa,
+        c.email,
+        p.name as plano,
+        i.amount as valor,
+        i.status,
+        i.due_date as vencimento,
+        i.paid_at as data_pagamento,
+        i.payment_method as metodo
+      FROM invoices i
+      JOIN companies c ON i.company_id = c.id
+      LEFT JOIN plans p ON i.plan_id = p.id
+      ${whereClause}
+      ORDER BY i.created_at DESC
+    `, params);
+
+    // Gerar CSV
+    const headers = ['ID', 'Empresa', 'Email', 'Plano', 'Valor', 'Status', 'Vencimento', 'Data Pagamento', 'Método'];
+    const csvRows = [headers.join(';')];
+
+    pagamentos.rows.forEach(row => {
+      csvRows.push([
+        row.id,
+        `"${row.empresa || ''}"`,
+        row.email || '',
+        row.plano || '',
+        row.valor ? `R$ ${parseFloat(row.valor).toFixed(2)}` : 'R$ 0,00',
+        row.status || '',
+        row.vencimento ? new Date(row.vencimento).toLocaleDateString('pt-BR') : '',
+        row.data_pagamento ? new Date(row.data_pagamento).toLocaleDateString('pt-BR') : '',
+        row.metodo || ''
+      ].join(';'));
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=financeiro_${new Date().toISOString().split('T')[0]}.csv`);
+    res.send('\uFEFF' + csvRows.join('\n'));
+  } catch (error) {
+    console.error('Erro ao exportar financeiro:', error);
+    res.status(500).json({ error: 'Erro ao exportar relatório financeiro' });
   }
 });
 
