@@ -21,18 +21,25 @@ const Simulador = () => {
     categoria: 'imovel',
     administradora_id: '',
     valor_credito: '',
-    prazo_meses: '120',
+    prazo_meses: '200',
   });
 
   // Taxas personalizadas
   const [taxasPersonalizadas, setTaxasPersonalizadas] = useState({
     usar_personalizadas: false,
-    taxa_administracao: '18',
+    taxa_administracao: '20',
     fundo_reserva: '2',
     seguro_vida: '0.03',
   });
 
-  // Percentuais personalizáveis
+  // Redutor do Grupo e Parcelas Reduzidas (modelo PortoBank)
+  const [redutorGrupo, setRedutorGrupo] = useState('40'); // % de desconto nas primeiras parcelas
+  const [qtdParcelasReduzidas, setQtdParcelasReduzidas] = useState('12'); // quantidade de parcelas com desconto
+
+  // Lance - Recurso Próprio
+  const [recursoProprio, setRecursoProprio] = useState(''); // valor em R$ que o cliente tem disponível
+
+  // Percentuais personalizáveis (para estudo adicional)
   const [percentuaisReduzidos, setPercentuaisReduzidos] = useState([50, 70]);
   const [percentuaisLances, setPercentuaisLances] = useState([10, 15, 20, 25, 30]);
   const [novoPercentualReduzido, setNovoPercentualReduzido] = useState('');
@@ -99,13 +106,19 @@ const Simulador = () => {
     const taxaAdm = parseFloat(taxasPersonalizadas.taxa_administracao) / 100;
     const fundoReserva = parseFloat(taxasPersonalizadas.fundo_reserva) / 100;
     const seguroMensal = parseFloat(taxasPersonalizadas.seguro_vida) / 100;
+    const redutor = parseFloat(redutorGrupo) / 100 || 0;
+    const qtdReduzidas = parseInt(qtdParcelasReduzidas) || 12;
+    const recursoProprioValor = parseCurrency(recursoProprio) || 0;
 
-    // Cálculos básicos
+    // Cálculos básicos (modelo PortoBank)
     const valorTaxaAdm = credito * taxaAdm;
     const valorFundoReserva = credito * fundoReserva;
     const valorSeguroTotal = credito * seguroMensal * prazo;
     const totalPagar = credito + valorTaxaAdm + valorFundoReserva + valorSeguroTotal;
-    const parcelaMensal = totalPagar / prazo;
+    const parcelaMensal = totalPagar / prazo; // Parcela integral
+
+    // Parcela com Redutor do Grupo (primeiras X parcelas)
+    const parcelaReduzidaComRedutor = parcelaMensal * (1 - redutor);
 
     // Comparativo com financiamento (estimativa com juros de 1.5% a.m.)
     const taxaFinanciamento = 0.015;
@@ -120,35 +133,83 @@ const Simulador = () => {
       economia: 100 - percentual
     }));
 
-    // Estudo de lance (percentuais sobre o crédito) - usando percentuais personalizados
-    const lances = percentuaisLances.sort((a, b) => a - b).map(percentual => ({
-      percentual,
-      valor: Math.round(credito * (percentual / 100) * 100) / 100,
-      // Após lance embutido, parcela reduz proporcionalmente
-      parcelaPosLance: Math.round(((totalPagar - (credito * percentual / 100)) / prazo) * 100) / 100
-    }));
+    // === LANCE FIXO vs LANCE LIVRE (modelo PortoBank) ===
 
-    // Parcela pós contemplação (considerando diferentes momentos)
-    // Simulação: contemplação no mês 12, 24, 36, 48
-    const parcelasPosContemplacao = [12, 24, 36, 48].map(mesContemplacao => {
-      const parcelasPagas = mesContemplacao;
-      const valorPago = parcelaMensal * parcelasPagas;
-      const saldoDevedor = totalPagar - valorPago;
-      const mesesRestantes = prazo - mesContemplacao;
-      const parcelaPosContemplacao = mesesRestantes > 0 ? saldoDevedor / mesesRestantes : 0;
+    // Lance Embutido máximo = 30% do crédito
+    const lanceEmbutidoMax = credito * 0.30;
+
+    // Representatividade do recurso próprio
+    const representatividadeRecursoProprio = recursoProprioValor > 0 ? (recursoProprioValor / credito) * 100 : 0;
+
+    // Lance Fixo: usa recurso próprio + lance embutido
+    const lanceLivre = {
+      recurso_proprio: recursoProprioValor,
+      lance_embutido: lanceEmbutidoMax,
+      total: recursoProprioValor + lanceEmbutidoMax,
+      representatividade: ((recursoProprioValor + lanceEmbutidoMax) / credito) * 100
+    };
+
+    // Estudo de lance por percentuais
+    const lances = percentuaisLances.sort((a, b) => a - b).map(percentual => {
+      const valorLance = credito * (percentual / 100);
+      // Lance pode ser composto de: recurso próprio + lance embutido
+      const lanceEmbutidoNecessario = Math.max(0, valorLance - recursoProprioValor);
+      const usaRecursoProprio = Math.min(recursoProprioValor, valorLance);
 
       return {
-        mesContemplacao,
-        parcelasPagas,
-        valorPago: Math.round(valorPago * 100) / 100,
-        saldoDevedor: Math.round(saldoDevedor * 100) / 100,
-        mesesRestantes,
-        parcelaPosContemplacao: Math.round(parcelaPosContemplacao * 100) / 100
+        percentual,
+        valor: Math.round(valorLance * 100) / 100,
+        recurso_proprio_usado: Math.round(usaRecursoProprio * 100) / 100,
+        lance_embutido_usado: Math.round(lanceEmbutidoNecessario * 100) / 100,
+        // Após lance embutido, parcela reduz proporcionalmente
+        parcelaPosLance: Math.round(((totalPagar - lanceEmbutidoNecessario) / prazo) * 100) / 100
       };
     });
 
+    // === PÓS-CONTEMPLAÇÃO (modelo PortoBank) ===
+    // Simulação considerando parcela reduzida nas primeiras parcelas
+    const calcularPosContemplacao = (mesContemplacao, usarParcelaReduzida = false) => {
+      let valorPago = 0;
+
+      if (usarParcelaReduzida) {
+        // Primeiras parcelas com redutor
+        const parcelasComRedutor = Math.min(mesContemplacao, qtdReduzidas);
+        const parcelasSemRedutor = Math.max(0, mesContemplacao - qtdReduzidas);
+        valorPago = (parcelaReduzidaComRedutor * parcelasComRedutor) + (parcelaMensal * parcelasSemRedutor);
+      } else {
+        valorPago = parcelaMensal * mesContemplacao;
+      }
+
+      const saldoDevedor = totalPagar - valorPago;
+      const mesesRestantes = prazo - mesContemplacao;
+
+      // Opção 1: Manter prazo, calcular nova parcela
+      const novaParcelaMantendoPrazo = mesesRestantes > 0 ? saldoDevedor / mesesRestantes : 0;
+
+      // Opção 2: Manter parcela, calcular novo prazo
+      const novoPrazoMantendoParcela = parcelaMensal > 0 ? Math.ceil(saldoDevedor / parcelaMensal) : 0;
+
+      return {
+        mesContemplacao,
+        parcelasPagas: mesContemplacao,
+        valorPago: Math.round(valorPago * 100) / 100,
+        saldoDevedor: Math.round(saldoDevedor * 100) / 100,
+        mesesRestantes,
+        // Opção 1: Nova parcela mantendo prazo
+        novaParcelaMantendoPrazo: Math.round(novaParcelaMantendoPrazo * 100) / 100,
+        // Opção 2: Novo prazo mantendo parcela
+        novoPrazoMantendoParcela
+      };
+    };
+
+    // Calcular pós-contemplação com parcela integral
+    const parcelasPosContemplacao = [12, 24, 36, 48, 60].map(mes => calcularPosContemplacao(mes, false));
+
+    // Calcular pós-contemplação com parcela reduzida (usando redutor do grupo)
+    const parcelasPosContemplacaoReduzida = [12, 24, 36, 48, 60].map(mes => calcularPosContemplacao(mes, true));
+
     return {
-      administradora_nome: 'Taxas Personalizadas',
+      administradora_nome: 'Simulação Personalizada',
       categoria: formData.categoria,
       valor_credito: credito,
       prazo_meses: prazo,
@@ -160,10 +221,22 @@ const Simulador = () => {
       valor_seguro_total: Math.round(valorSeguroTotal * 100) / 100,
       total_pagar: Math.round(totalPagar * 100) / 100,
       parcela_mensal: Math.round(parcelaMensal * 100) / 100,
+
+      // Redutor do Grupo
+      redutor_grupo: parseFloat(redutorGrupo) || 0,
+      qtd_parcelas_reduzidas: qtdReduzidas,
+      parcela_reduzida_com_redutor: Math.round(parcelaReduzidaComRedutor * 100) / 100,
+
+      // Lance
+      recurso_proprio: recursoProprioValor,
+      lance_livre: lanceLivre,
+
       // Novas informações
       parcelas_reduzidas: parcelasReduzidas,
       lances,
       parcelas_pos_contemplacao: parcelasPosContemplacao,
+      parcelas_pos_contemplacao_reduzida: parcelasPosContemplacaoReduzida,
+
       comparativo_financiamento: {
         parcela_financiamento: Math.round(parcelaFinanciamento * 100) / 100,
         total_financiamento: Math.round(totalFinanciamento * 100) / 100,
@@ -290,9 +363,15 @@ const Simulador = () => {
 
           <div class="highlight">
             <div class="badge">${sim?.categoria?.toUpperCase() || 'IMÓVEL'}</div>
-            <div class="label">Parcela Mensal</div>
+            <div class="label">Parcela Integral</div>
             <div class="parcela">${formatarMoeda(sim?.parcela_mensal)}</div>
             <div class="label" style="margin-top: 5px;">em ${sim?.prazo_meses} meses</div>
+            ${sim?.redutor_grupo > 0 ? `
+              <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.3);">
+                <div class="label">Parcela Reduzida (${sim?.redutor_grupo}% nas ${sim?.qtd_parcelas_reduzidas} primeiras)</div>
+                <div class="parcela" style="font-size: 24px; color: #86efac;">${formatarMoeda(sim?.parcela_reduzida_com_redutor)}</div>
+              </div>
+            ` : ''}
           </div>
 
           <div class="grid-2">
@@ -302,6 +381,10 @@ const Simulador = () => {
               <div class="row"><span class="label">Prazo</span><span class="value">${sim?.prazo_meses} meses</span></div>
               <div class="row"><span class="label">Taxa Administrativa</span><span class="value">${sim?.taxa_administracao}%</span></div>
               <div class="row"><span class="label">Fundo de Reserva</span><span class="value">${sim?.fundo_reserva}%</span></div>
+              ${sim?.redutor_grupo > 0 ? `
+                <div class="row"><span class="label">Redutor do Grupo</span><span class="value text-green">${sim?.redutor_grupo}%</span></div>
+                <div class="row"><span class="label">Parcelas Reduzidas</span><span class="value">${sim?.qtd_parcelas_reduzidas} primeiras</span></div>
+              ` : ''}
             </div>
 
             <div class="section">
@@ -313,8 +396,27 @@ const Simulador = () => {
             </div>
           </div>
 
+          ${sim?.redutor_grupo > 0 ? `
+          <div class="section" style="background: linear-gradient(135deg, #10B981, #059669); color: white;">
+            <div class="section-title" style="color: white; border-color: rgba(255,255,255,0.3);">REDUTOR DO GRUPO</div>
+            <div style="display: flex; justify-content: space-around; text-align: center;">
+              <div>
+                <div style="opacity: 0.9; font-size: 11px;">Parcela Integral</div>
+                <div style="font-size: 18px; font-weight: bold;">${formatarMoeda(sim?.parcela_mensal)}</div>
+              </div>
+              <div>
+                <div style="opacity: 0.9; font-size: 11px;">${sim?.qtd_parcelas_reduzidas} Primeiras Parcelas</div>
+                <div style="font-size: 22px; font-weight: bold;">${formatarMoeda(sim?.parcela_reduzida_com_redutor)}</div>
+              </div>
+              <div>
+                <div style="opacity: 0.9; font-size: 11px;">Economia</div>
+                <div style="font-size: 18px; font-weight: bold;">-${sim?.redutor_grupo}%</div>
+              </div>
+            </div>
+          </div>
+          ` : `
           <div class="section">
-            <div class="section-title">OPÇÕES DE PARCELAS REDUZIDAS (ATÉ CONTEMPLAÇÃO)</div>
+            <div class="section-title">OPÇÕES DE PARCELAS REDUZIDAS</div>
             <table>
               <tr>
                 <th>Tipo</th>
@@ -335,9 +437,30 @@ const Simulador = () => {
               `).join('')}
             </table>
           </div>
+          `}
 
           <div class="section">
             <div class="section-title">ESTUDO DE OFERTA DE LANCE</div>
+            ${sim?.recurso_proprio > 0 ? `
+              <div style="background: linear-gradient(135deg, #3B82F6, #6366F1); color: white; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">Seu Lance Máximo (Recurso Próprio + Embutido)</div>
+                <div style="display: flex; justify-content: space-around; text-align: center;">
+                  <div>
+                    <div style="font-size: 10px; opacity: 0.8;">Recurso Próprio</div>
+                    <div style="font-size: 14px; font-weight: bold;">${formatarMoeda(sim?.lance_livre?.recurso_proprio)}</div>
+                  </div>
+                  <div>
+                    <div style="font-size: 10px; opacity: 0.8;">+ Embutido (30%)</div>
+                    <div style="font-size: 14px; font-weight: bold;">${formatarMoeda(sim?.lance_livre?.lance_embutido)}</div>
+                  </div>
+                  <div>
+                    <div style="font-size: 10px; opacity: 0.8;">= Total</div>
+                    <div style="font-size: 16px; font-weight: bold;">${formatarMoeda(sim?.lance_livre?.total)}</div>
+                    <div style="font-size: 9px; opacity: 0.8;">${sim?.lance_livre?.representatividade?.toFixed(1)}% do crédito</div>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
             <table>
               <tr>
                 <th>Lance (%)</th>
@@ -355,25 +478,24 @@ const Simulador = () => {
           </div>
 
           <div class="section">
-            <div class="section-title">PARCELAS PÓS CONTEMPLAÇÃO</div>
+            <div class="section-title">ESTIMATIVA PÓS CONTEMPLAÇÃO</div>
             <table>
               <tr>
                 <th>Contemplação</th>
-                <th>Parcelas Pagas</th>
                 <th>Saldo Devedor</th>
-                <th>Meses Restantes</th>
                 <th>Nova Parcela</th>
+                <th>Novo Prazo*</th>
               </tr>
               ${sim?.parcelas_pos_contemplacao?.map(p => `
                 <tr>
                   <td>Mês ${p.mesContemplacao}</td>
-                  <td>${p.parcelasPagas}</td>
                   <td>${formatarMoeda(p.saldoDevedor)}</td>
-                  <td>${p.mesesRestantes}</td>
-                  <td><strong>${formatarMoeda(p.parcelaPosContemplacao)}</strong></td>
+                  <td class="text-blue"><strong>${formatarMoeda(p.novaParcelaMantendoPrazo)}</strong></td>
+                  <td>${p.novoPrazoMantendoParcela} meses</td>
                 </tr>
               `).join('')}
             </table>
+            <div style="font-size: 9px; color: #666; margin-top: 5px;">* Novo prazo mantendo parcela de ${formatarMoeda(sim?.parcela_mensal)}</div>
           </div>
 
           <div class="economia">
@@ -476,6 +598,73 @@ const Simulador = () => {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Redutor do Grupo e Parcelas Reduzidas */}
+                <div className="mb-6 p-4 bg-green-50 rounded-xl border border-green-200">
+                  <h3 className="text-sm font-semibold text-green-800 mb-3 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Redutor do Grupo
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Redutor (%)
+                      </label>
+                      <select
+                        value={redutorGrupo}
+                        onChange={(e) => setRedutorGrupo(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                      >
+                        <option value="0">0% (Sem redutor)</option>
+                        <option value="20">20%</option>
+                        <option value="30">30%</option>
+                        <option value="40">40%</option>
+                        <option value="50">50%</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Parcelas Reduzidas
+                      </label>
+                      <select
+                        value={qtdParcelasReduzidas}
+                        onChange={(e) => setQtdParcelasReduzidas(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                      >
+                        <option value="6">6 primeiras</option>
+                        <option value="12">12 primeiras</option>
+                        <option value="18">18 primeiras</option>
+                        <option value="24">24 primeiras</option>
+                        <option value="36">36 primeiras</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recurso Próprio para Lance */}
+                <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                  <h3 className="text-sm font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Recurso Próprio (Lance)
+                  </h3>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
+                    <input
+                      type="text"
+                      value={recursoProprio ? formatCurrency(recursoProprio).replace('R$', '').trim() : ''}
+                      onChange={(e) => setRecursoProprio(e.target.value.replace(/\D/g, ''))}
+                      placeholder="0,00 (opcional)"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    />
+                  </div>
+                  <p className="text-xs text-blue-600 mt-2">
+                    Valor disponível para ofertar como lance (recurso próprio)
+                  </p>
                 </div>
 
                 {/* Botão Calcular */}
@@ -686,13 +875,13 @@ const Simulador = () => {
                 <>
                   {/* Card Principal */}
                   <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl shadow-lg p-6 text-white">
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between items-start mb-4">
                       <div>
                         <div className="text-sm opacity-80 mb-1">{resultado.simulacao?.administradora_nome || 'Simulação Personalizada'}</div>
                         <div className="text-4xl font-bold mb-2">
                           {formatarMoeda(resultado.simulacao?.parcela_mensal)}
                         </div>
-                        <div className="text-sm opacity-80">por mês • {resultado.simulacao?.prazo_meses} parcelas</div>
+                        <div className="text-sm opacity-80">parcela integral • {resultado.simulacao?.prazo_meses} meses</div>
                       </div>
                       <div className="text-right">
                         <div className="bg-white/20 px-3 py-1 rounded-lg text-sm mb-2">
@@ -703,6 +892,25 @@ const Simulador = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* Parcela Reduzida com Redutor do Grupo */}
+                    {resultado.simulacao?.redutor_grupo > 0 && (
+                      <div className="bg-white/10 rounded-xl p-4 mt-2">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <div className="text-sm opacity-80">
+                              {resultado.simulacao?.qtd_parcelas_reduzidas} primeiras parcelas ({resultado.simulacao?.redutor_grupo}% redutor)
+                            </div>
+                            <div className="text-2xl font-bold text-green-300">
+                              {formatarMoeda(resultado.simulacao?.parcela_reduzida_com_redutor)}
+                            </div>
+                          </div>
+                          <div className="bg-green-400/30 px-3 py-1 rounded-lg text-sm">
+                            -{resultado.simulacao?.redutor_grupo}%
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Abas */}
@@ -785,32 +993,56 @@ const Simulador = () => {
                       {abaAtiva === 'parcelas' && (
                         <div className="space-y-4">
                           <p className="text-gray-600 text-sm mb-4">
-                            Muitas administradoras oferecem a opção de pagar parcelas reduzidas até a contemplação.
-                            Após ser contemplado, o saldo é diluído nas parcelas restantes.
+                            O redutor de grupo permite pagar parcelas menores nas primeiras mensalidades.
+                            Após esse período, a parcela volta ao valor integral.
                           </p>
 
                           <div className="space-y-3">
+                            {/* Parcela com Redutor do Grupo */}
+                            {resultado.simulacao?.redutor_grupo > 0 && (
+                              <div className="p-4 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl text-white">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <div className="font-semibold">Redutor do Grupo ({resultado.simulacao?.redutor_grupo}%)</div>
+                                    <div className="text-sm opacity-90">
+                                      {resultado.simulacao?.qtd_parcelas_reduzidas} primeiras parcelas
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-3xl font-bold">
+                                      {formatarMoeda(resultado.simulacao?.parcela_reduzida_com_redutor)}
+                                    </div>
+                                    <div className="text-sm opacity-90">por mês</div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                               <div>
                                 <div className="font-semibold text-gray-900">Parcela Integral (100%)</div>
-                                <div className="text-sm text-gray-500">Valor normal da parcela</div>
+                                <div className="text-sm text-gray-500">Após período do redutor</div>
                               </div>
                               <div className="text-2xl font-bold text-gray-900">
                                 {formatarMoeda(resultado.simulacao?.parcela_mensal)}
                               </div>
                             </div>
 
-                            {resultado.simulacao?.parcelas_reduzidas?.map((parcela, idx) => (
-                              <div key={idx} className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-200">
-                                <div>
-                                  <div className="font-semibold text-green-800">Parcela Reduzida ({parcela.percentual}%)</div>
-                                  <div className="text-sm text-green-600">Economia de {parcela.economia}% até contemplação</div>
+                            {/* Outras opções de parcela reduzida */}
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                              <h4 className="text-sm font-semibold text-gray-700 mb-3">Outras opções de redução:</h4>
+                              {resultado.simulacao?.parcelas_reduzidas?.map((parcela, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200 mb-2">
+                                  <div>
+                                    <div className="font-medium text-green-800">Pagar {parcela.percentual}% da parcela</div>
+                                    <div className="text-xs text-green-600">Economia de {parcela.economia}%</div>
+                                  </div>
+                                  <div className="text-lg font-bold text-green-700">
+                                    {formatarMoeda(parcela.valor)}
+                                  </div>
                                 </div>
-                                <div className="text-2xl font-bold text-green-700">
-                                  {formatarMoeda(parcela.valor)}
-                                </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
 
                           <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
@@ -835,30 +1067,74 @@ const Simulador = () => {
                         <div className="space-y-4">
                           <p className="text-gray-600 text-sm mb-4">
                             Lance é um valor que você oferece para antecipar sua contemplação.
-                            O valor do lance é abatido do seu crédito ou pode ser pago à parte (lance embutido).
+                            Pode ser composto de recurso próprio + lance embutido (até 30% do crédito).
                           </p>
 
+                          {/* Lance Livre - Recurso Próprio + Embutido */}
+                          {resultado.simulacao?.recurso_proprio > 0 && (
+                            <div className="bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl p-4 text-white mb-4">
+                              <h4 className="font-semibold mb-3 flex items-center gap-2">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                </svg>
+                                Seu Lance Máximo (Livre)
+                              </h4>
+                              <div className="grid grid-cols-3 gap-4 text-center">
+                                <div className="bg-white/10 rounded-lg p-3">
+                                  <div className="text-xs opacity-80">Recurso Próprio</div>
+                                  <div className="text-lg font-bold">{formatarMoeda(resultado.simulacao?.lance_livre?.recurso_proprio)}</div>
+                                </div>
+                                <div className="bg-white/10 rounded-lg p-3">
+                                  <div className="text-xs opacity-80">+ Lance Embutido (30%)</div>
+                                  <div className="text-lg font-bold">{formatarMoeda(resultado.simulacao?.lance_livre?.lance_embutido)}</div>
+                                </div>
+                                <div className="bg-white/20 rounded-lg p-3">
+                                  <div className="text-xs opacity-80">= Total</div>
+                                  <div className="text-xl font-bold">{formatarMoeda(resultado.simulacao?.lance_livre?.total)}</div>
+                                  <div className="text-xs opacity-80">{resultado.simulacao?.lance_livre?.representatividade?.toFixed(1)}% do crédito</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Tabela de Lances por Percentual */}
                           <div className="overflow-x-auto">
                             <table className="w-full">
                               <thead>
                                 <tr className="bg-gray-50">
-                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Lance</th>
-                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor do Lance</th>
-                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Parcela Após Lance*</th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Lance</th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor Total</th>
+                                  {resultado.simulacao?.recurso_proprio > 0 && (
+                                    <>
+                                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rec. Próprio</th>
+                                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Embutido</th>
+                                    </>
+                                  )}
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Parcela Pós*</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {resultado.simulacao?.lances?.map((lance, idx) => (
                                   <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                    <td className="px-4 py-3">
+                                    <td className="px-3 py-3">
                                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
                                         {lance.percentual}%
                                       </span>
                                     </td>
-                                    <td className="px-4 py-3 font-semibold text-gray-900">
+                                    <td className="px-3 py-3 font-semibold text-gray-900">
                                       {formatarMoeda(lance.valor)}
                                     </td>
-                                    <td className="px-4 py-3 font-semibold text-green-600">
+                                    {resultado.simulacao?.recurso_proprio > 0 && (
+                                      <>
+                                        <td className="px-3 py-3 text-blue-600 text-sm">
+                                          {formatarMoeda(lance.recurso_proprio_usado)}
+                                        </td>
+                                        <td className="px-3 py-3 text-purple-600 text-sm">
+                                          {formatarMoeda(lance.lance_embutido_usado)}
+                                        </td>
+                                      </>
+                                    )}
+                                    <td className="px-3 py-3 font-semibold text-green-600">
                                       {formatarMoeda(lance.parcelaPosLance)}
                                     </td>
                                   </tr>
@@ -892,48 +1168,94 @@ const Simulador = () => {
                       {abaAtiva === 'poscontemplacao' && (
                         <div className="space-y-4">
                           <p className="text-gray-600 text-sm mb-4">
-                            Simulação de como ficará sua parcela após ser contemplado em diferentes momentos do plano.
+                            Após a contemplação, você pode escolher entre manter o prazo original (nova parcela) ou manter a parcela (novo prazo).
                           </p>
 
-                          <div className="overflow-x-auto">
-                            <table className="w-full">
-                              <thead>
-                                <tr className="bg-gray-50">
-                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Contemplação</th>
-                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Parcelas Pagas</th>
-                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor Pago</th>
-                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Saldo Devedor</th>
-                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Meses Restantes</th>
-                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nova Parcela</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {resultado.simulacao?.parcelas_pos_contemplacao?.map((item, idx) => (
-                                  <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                    <td className="px-4 py-3">
-                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                        Mês {item.mesContemplacao}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-900">{item.parcelasPagas}</td>
-                                    <td className="px-4 py-3 text-gray-900">{formatarMoeda(item.valorPago)}</td>
-                                    <td className="px-4 py-3 text-gray-900">{formatarMoeda(item.saldoDevedor)}</td>
-                                    <td className="px-4 py-3 text-gray-900">{item.mesesRestantes}</td>
-                                    <td className="px-4 py-3 font-bold text-primary-600">{formatarMoeda(item.parcelaPosContemplacao)}</td>
+                          {/* Com Parcela Integral */}
+                          <div className="mb-4">
+                            <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                              <span className="w-3 h-3 bg-gray-400 rounded-full"></span>
+                              Com Parcela Integral
+                            </h4>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-gray-50">
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Contemplação</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Saldo Devedor</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Nova Parcela</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Novo Prazo*</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                                </thead>
+                                <tbody>
+                                  {resultado.simulacao?.parcelas_pos_contemplacao?.map((item, idx) => (
+                                    <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                      <td className="px-3 py-2">
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                          Mês {item.mesContemplacao}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2 text-gray-900">{formatarMoeda(item.saldoDevedor)}</td>
+                                      <td className="px-3 py-2 font-bold text-primary-600">{formatarMoeda(item.novaParcelaMantendoPrazo)}</td>
+                                      <td className="px-3 py-2 text-gray-600">{item.novoPrazoMantendoParcela} meses</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
 
-                          <div className="bg-gray-50 rounded-xl p-4">
+                          {/* Com Parcela Reduzida (Redutor do Grupo) */}
+                          {resultado.simulacao?.redutor_grupo > 0 && (
+                            <div className="mb-4">
+                              <h4 className="text-sm font-semibold text-green-700 mb-3 flex items-center gap-2">
+                                <span className="w-3 h-3 bg-green-500 rounded-full"></span>
+                                Com Redutor do Grupo ({resultado.simulacao?.redutor_grupo}% nas {resultado.simulacao?.qtd_parcelas_reduzidas} primeiras)
+                              </h4>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="bg-green-50">
+                                      <th className="px-3 py-2 text-left text-xs font-semibold text-green-700">Contemplação</th>
+                                      <th className="px-3 py-2 text-left text-xs font-semibold text-green-700">Saldo Devedor</th>
+                                      <th className="px-3 py-2 text-left text-xs font-semibold text-green-700">Nova Parcela</th>
+                                      <th className="px-3 py-2 text-left text-xs font-semibold text-green-700">Novo Prazo*</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {resultado.simulacao?.parcelas_pos_contemplacao_reduzida?.map((item, idx) => (
+                                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-green-50/50'}>
+                                        <td className="px-3 py-2">
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            Mês {item.mesContemplacao}
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-2 text-gray-900">{formatarMoeda(item.saldoDevedor)}</td>
+                                        <td className="px-3 py-2 font-bold text-green-600">{formatarMoeda(item.novaParcelaMantendoPrazo)}</td>
+                                        <td className="px-3 py-2 text-gray-600">{item.novoPrazoMantendoParcela} meses</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="text-xs text-gray-500">
+                            * Novo prazo mantendo a parcela original de {formatarMoeda(resultado.simulacao?.parcela_mensal)}
+                          </div>
+
+                          <div className="bg-purple-50 rounded-xl p-4 border border-purple-200">
                             <div className="flex items-start gap-2">
-                              <svg className="w-5 h-5 text-gray-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-5 h-5 text-purple-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              <div className="text-sm text-gray-600">
-                                <strong>Observação:</strong> Estes valores são estimativas considerando parcela integral até a contemplação.
-                                Parcelas reduzidas ou lances podem alterar estes valores.
+                              <div className="text-sm text-purple-700">
+                                <strong>Opções após contemplação:</strong>
+                                <ul className="mt-1 list-disc list-inside space-y-1">
+                                  <li><strong>Nova Parcela:</strong> Mantém o prazo original, ajusta o valor da parcela</li>
+                                  <li><strong>Novo Prazo:</strong> Mantém a parcela original, ajusta a quantidade de meses</li>
+                                </ul>
                               </div>
                             </div>
                           </div>
@@ -970,16 +1292,29 @@ const Simulador = () => {
                     <button
                       onClick={() => {
                         const sim = resultado.simulacao;
-                        const parcelasTexto = sim?.parcelas_reduzidas?.map(p => `• ${p.percentual}%: ${formatarMoeda(p.valor)}`).join('\n') || '';
-                        const texto = `*SIMULAÇÃO DE CONSÓRCIO*\n\n` +
+                        let texto = `*SIMULAÇÃO DE CONSÓRCIO*\n\n` +
                           `📊 *${sim?.categoria?.toUpperCase()}*\n` +
                           `💰 Crédito: ${formatarMoeda(sim?.valor_credito)}\n` +
                           `📅 Prazo: ${sim?.prazo_meses} meses\n` +
-                          `💵 Parcela: *${formatarMoeda(sim?.parcela_mensal)}*\n\n` +
-                          `📉 *Opções de Parcela Reduzida:*\n` +
-                          `${parcelasTexto}\n\n` +
-                          `✅ Economia vs Financiamento: ${formatarMoeda(sim?.comparativo_financiamento?.economia)}\n\n` +
+                          `💵 Parcela Integral: *${formatarMoeda(sim?.parcela_mensal)}*\n`;
+
+                        // Redutor do Grupo
+                        if (sim?.redutor_grupo > 0) {
+                          texto += `\n🎯 *Redutor do Grupo (${sim?.redutor_grupo}%):*\n` +
+                            `• ${sim?.qtd_parcelas_reduzidas} primeiras parcelas: *${formatarMoeda(sim?.parcela_reduzida_com_redutor)}*\n`;
+                        }
+
+                        // Lance Livre (se tiver recurso próprio)
+                        if (sim?.recurso_proprio > 0) {
+                          texto += `\n💎 *Seu Lance Máximo:*\n` +
+                            `• Recurso Próprio: ${formatarMoeda(sim?.lance_livre?.recurso_proprio)}\n` +
+                            `• + Embutido (30%): ${formatarMoeda(sim?.lance_livre?.lance_embutido)}\n` +
+                            `• = Total: *${formatarMoeda(sim?.lance_livre?.total)}* (${sim?.lance_livre?.representatividade?.toFixed(1)}%)\n`;
+                        }
+
+                        texto += `\n✅ Economia vs Financiamento: ${formatarMoeda(sim?.comparativo_financiamento?.economia)}\n\n` +
                           `_Simulação feita pelo Cflow CRM_`;
+
                         const url = `https://wa.me/?text=${encodeURIComponent(texto)}`;
                         window.open(url, '_blank');
                       }}
