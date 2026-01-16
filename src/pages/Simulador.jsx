@@ -84,19 +84,23 @@ const Simulador = () => {
     tipoContratacao: 'PF', // PF ou PJ
     prazoTotal: '240',
 
+    // Taxas editáveis (preenchidas pela categoria, mas editáveis)
+    taxaAdministrativa: '17', // percentual
+    fundoReserva: '2', // percentual
+    seguroVida: '0.031', // percentual mensal
+
     // Etapa 2 - Redutor do Grupo
     usaRedutor: false,
     redutorGrupo: '50', // percentual
-    quantidadeParcelasReduzidas: '12',
 
     // Etapa 3 - Lance
     recursoProprio: '',
     valorFGTS: '',
     lanceEmbutido: '',
 
-    // Etapa 4 - Projeção Pós-Contemplação
+    // Etapa 4 - Projeção Pós-Contemplação (qtd parcelas reduzidas = mês contemplação)
     usaProjecao: false,
-    parcelaContemplacao: '12',
+    parcelaContemplacao: '12', // também define qtd de parcelas com redutor
   });
 
   const categoriaAtual = CATEGORIAS[formData.categoria];
@@ -140,11 +144,16 @@ const Simulador = () => {
     const prazo = parseInt(formData.prazoTotal);
     const tipoPF = formData.tipoContratacao === 'PF';
 
+    // Usar taxas editáveis (convertidas para decimal)
+    const taxaAdmin = parseFloat(formData.taxaAdministrativa) / 100;
+    const taxaFundo = parseFloat(formData.fundoReserva) / 100;
+    const taxaSeguro = parseFloat(formData.seguroVida) / 100;
+
     // 1. Valor da Categoria (Crédito + Taxas)
-    const valorCategoria = credito * (1 + config.taxaAdministrativa + config.fundoReserva);
+    const valorCategoria = credito * (1 + taxaAdmin + taxaFundo);
 
     // 2. Seguro mensal (apenas PF)
-    const seguroMensal = tipoPF ? valorCategoria * config.seguroVida : 0;
+    const seguroMensal = tipoPF ? valorCategoria * taxaSeguro : 0;
 
     // 3. Parcela base
     const parcelaPJ = valorCategoria / prazo;
@@ -156,7 +165,8 @@ const Simulador = () => {
     let economiaMensal = 0;
     const usaRedutor = formData.usaRedutor;
     const redutorGrupo = parseFloat(formData.redutorGrupo) / 100;
-    const qtdParcelasReduzidas = parseInt(formData.quantidadeParcelasReduzidas) || 0;
+    // Qtd parcelas reduzidas = mês de contemplação (se usar projeção)
+    const qtdParcelasReduzidas = formData.usaProjecao ? parseInt(formData.parcelaContemplacao) || 0 : prazo;
 
     if (usaRedutor && redutorGrupo > 0) {
       const parcelaReduzidaPJ = parcelaPJ * (1 - redutorGrupo);
@@ -209,7 +219,7 @@ const Simulador = () => {
         const novaParcelaPJ = Math.max(novaParcelaTeorica, pisoParcela);
 
         // Se PF, recalcular seguro sobre saldo
-        const novoSeguro = tipoPF ? saldoDevedor * config.seguroVida : 0;
+        const novoSeguro = tipoPF ? saldoDevedor * taxaSeguro : 0;
         const novaParcela = novaParcelaPJ + novoSeguro;
 
         // Novo prazo real
@@ -233,10 +243,11 @@ const Simulador = () => {
       }
     }
 
-    // 7. Demonstrativo de taxas
-    const taxaAdminTotal = credito * config.taxaAdministrativa;
-    const fundoReservaTotal = credito * config.fundoReserva;
-    const taxaMensal = (config.taxaAdministrativa + config.fundoReserva) / prazo;
+    // 7. Demonstrativo de taxas (usando taxas editáveis)
+    const taxaAdminTotal = credito * taxaAdmin;
+    const fundoReservaTotal = credito * taxaFundo;
+    const taxaTotalPercentual = taxaAdmin + taxaFundo;
+    const taxaMensal = taxaTotalPercentual / prazo;
     const taxaAnual = taxaMensal * 12;
 
     // Resultado final
@@ -250,7 +261,12 @@ const Simulador = () => {
 
       // Valores base
       valorCategoria,
-      taxaTotalPercentual: config.taxaAdministrativa + config.fundoReserva,
+      taxaTotalPercentual,
+
+      // Taxas utilizadas (editáveis)
+      taxaAdmin,
+      taxaFundo,
+      taxaSeguro,
 
       // Parcelas
       parcelaPJ,
@@ -468,7 +484,11 @@ const Simulador = () => {
                           ...formData,
                           categoria: cat.id,
                           prazoTotal: cat.prazosDisponiveis[0].toString(),
-                          valorFGTS: cat.permiteFGTS ? formData.valorFGTS : ''
+                          valorFGTS: cat.permiteFGTS ? formData.valorFGTS : '',
+                          // Preencher taxas da categoria
+                          taxaAdministrativa: (cat.taxaAdministrativa * 100).toString(),
+                          fundoReserva: (cat.fundoReserva * 100).toString(),
+                          seguroVida: (cat.seguroVida * 100).toFixed(3),
                         })}
                         className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center ${
                           formData.categoria === cat.id
@@ -530,7 +550,7 @@ const Simulador = () => {
                 </div>
 
                 {/* Prazo */}
-                <div>
+                <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Prazo</label>
                   <select
                     value={formData.prazoTotal}
@@ -541,6 +561,43 @@ const Simulador = () => {
                       <option key={p} value={p}>{p} meses</option>
                     ))}
                   </select>
+                </div>
+
+                {/* Taxas Editáveis */}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Taxas (editáveis)</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Taxa Adm. (%)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.taxaAdministrativa}
+                        onChange={(e) => setFormData({ ...formData, taxaAdministrativa: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Fundo Res. (%)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.fundoReserva}
+                        onChange={(e) => setFormData({ ...formData, fundoReserva: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Seguro (%/mês)</label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        value={formData.seguroVida}
+                        onChange={(e) => setFormData({ ...formData, seguroVida: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -565,7 +622,7 @@ const Simulador = () => {
                 </div>
 
                 {formData.usaRedutor && (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Redutor (%)</label>
                       <input
@@ -577,16 +634,9 @@ const Simulador = () => {
                         max="100"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Qtd. Parcelas</label>
-                      <input
-                        type="number"
-                        value={formData.quantidadeParcelasReduzidas}
-                        onChange={(e) => setFormData({ ...formData, quantidadeParcelasReduzidas: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500"
-                        min="1"
-                      />
-                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      💡 A quantidade de parcelas reduzidas será igual ao mês de contemplação (etapa 4)
+                    </p>
                   </div>
                 )}
               </div>
@@ -844,12 +894,18 @@ const Simulador = () => {
                     <div className="space-y-3 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Taxa Administrativa</span>
-                        <span>{formatarMoeda(resultado.taxaAdminTotal)} ({formatarPercentual(categoriaAtual.taxaAdministrativa)})</span>
+                        <span>{formatarMoeda(resultado.taxaAdminTotal)} ({formatarPercentual(resultado.taxaAdmin)})</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Fundo de Reserva</span>
-                        <span>{formatarMoeda(resultado.fundoReservaTotal)} ({formatarPercentual(categoriaAtual.fundoReserva)})</span>
+                        <span>{formatarMoeda(resultado.fundoReservaTotal)} ({formatarPercentual(resultado.taxaFundo)})</span>
                       </div>
+                      {resultado.tipoContratacao === 'PF' && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Seguro Vida</span>
+                          <span>{formatarPercentual(resultado.taxaSeguro, 3)}/mês</span>
+                        </div>
+                      )}
                       <div className="border-t pt-3 flex justify-between">
                         <span className="text-gray-600">Taxa Total</span>
                         <span className="font-semibold">{formatarPercentual(resultado.taxaTotalPercentual)}</span>
