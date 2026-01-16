@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-accent-900;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', 'Inter', sans-serif;
+    @apply font-semibold;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary-500 text-white px-6 py-3 rounded-lg hover:bg-primary-600 transition-all font-medium shadow-sm hover:shadow-md;
+  }
+
+  .btn-accent {
+    @apply bg-primary-500 text-white px-6 py-3 rounded-lg hover:bg-primary-600 transition-all font-medium shadow-sm hover:shadow-md;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-200 text-accent-800 px-6 py-3 rounded-lg hover:bg-gray-300 transition-colors font-medium;
+  }
+
+  .btn-danger {
+    @apply bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition-colors font-medium;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-accent-900 px-6 py-3 rounded-lg hover:bg-gray-100 transition-colors font-medium;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 border border-accent-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all bg-white;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-sm p-6 border border-accent-200 hover:shadow-md transition-shadow;
+  }
+
+  .card-feature {
+    @apply bg-white rounded-xl shadow-sm p-8 border border-accent-200 hover:shadow-lg transition-all hover:-translate-y-1;
+  }
+}
