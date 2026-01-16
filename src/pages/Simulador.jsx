@@ -207,26 +207,22 @@ const Simulador = () => {
           valorPago = parcelaBase * parcelaContemplacao;
         }
 
-        // Saldo devedor
+        // Saldo devedor = Total a Pagar - Valor Pago - Lance Total
         const saldoDevedor = Math.max(0, valorCategoria - valorPago - lanceTotal);
 
-        // Parcelas restantes
+        // Parcelas restantes no contrato original
         const parcelasRestantes = prazo - parcelaContemplacao;
 
-        // Nova parcela (com piso de 50% da original)
-        const novaParcelaTeorica = saldoDevedor / parcelasRestantes;
-        const pisoParcela = parcelaPJ / 2;
-        const novaParcelaPJ = Math.max(novaParcelaTeorica, pisoParcela);
+        // Nova parcela = Saldo Devedor / Parcelas Restantes (sem piso)
+        const novaParcelaPJ = saldoDevedor / parcelasRestantes;
 
-        // Se PF, recalcular seguro sobre saldo
+        // Se PF, adicionar seguro sobre o saldo devedor
         const novoSeguro = tipoPF ? saldoDevedor * taxaSeguro : 0;
         const novaParcela = novaParcelaPJ + novoSeguro;
 
-        // Novo prazo real
-        const novoPrazo = saldoDevedor > 0 ? Math.ceil(saldoDevedor / novaParcelaPJ) : 0;
-
-        // Alternativa: manter parcela original e reduzir prazo
-        const prazoReduzido = saldoDevedor > 0 ? Math.ceil(saldoDevedor / parcelaPJ) : 0;
+        // Alternativa: se quiser pagar com a parcela que estava pagando, quantos meses?
+        const parcelaAnterior = usaRedutor ? parcelaReduzida : parcelaBase;
+        const prazoComParcelaAnterior = saldoDevedor > 0 ? Math.ceil(saldoDevedor / parcelaAnterior) : 0;
 
         posContemplacao = {
           creditoLiberado,
@@ -235,8 +231,9 @@ const Simulador = () => {
           saldoDevedor,
           parcelasRestantes,
           novaParcela,
-          novoPrazo,
-          prazoReduzido,
+          novoPrazo: parcelasRestantes,
+          prazoComParcelaAnterior,
+          parcelaAnterior,
           novoSeguro,
           economia: parcelaBase - novaParcela
         };
@@ -878,12 +875,12 @@ const Simulador = () => {
                         </div>
                       </div>
                       <div className="bg-white/20 rounded-xl p-4 text-center">
-                        <p className="text-sm opacity-80">Nova Parcela</p>
+                        <p className="text-sm opacity-80">Nova Parcela (Saldo ÷ {resultado.posContemplacao.parcelasRestantes} meses)</p>
                         <p className="text-3xl font-bold">{formatarMoeda(resultado.posContemplacao.novaParcela)}</p>
                         <p className="text-sm opacity-80 mt-1">por mais {resultado.posContemplacao.novoPrazo} meses</p>
                       </div>
-                      <div className="mt-4 text-sm opacity-90">
-                        <p>💡 Alternativa: manter parcela atual e quitar em {resultado.posContemplacao.prazoReduzido} meses</p>
+                      <div className="mt-4 text-sm opacity-90 bg-white/10 rounded-lg p-3">
+                        <p>💡 Alternativa: pagando {formatarMoeda(resultado.posContemplacao.parcelaAnterior)}/mês quita em {resultado.posContemplacao.prazoComParcelaAnterior} meses</p>
                       </div>
                     </div>
                   )}
