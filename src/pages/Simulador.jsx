@@ -15,6 +15,7 @@ const Simulador = () => {
   const [criandoLead, setCriandoLead] = useState(false);
   const [showTaxasPersonalizadas, setShowTaxasPersonalizadas] = useState(false);
   const [gerandoPDF, setGerandoPDF] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState('resumo'); // resumo, parcelas, lance
 
   const [formData, setFormData] = useState({
     categoria: 'imovel',
@@ -93,7 +94,7 @@ const Simulador = () => {
     const fundoReserva = parseFloat(taxasPersonalizadas.fundo_reserva) / 100;
     const seguroMensal = parseFloat(taxasPersonalizadas.seguro_vida) / 100;
 
-    // Cálculos
+    // Cálculos básicos
     const valorTaxaAdm = credito * taxaAdm;
     const valorFundoReserva = credito * fundoReserva;
     const valorSeguroTotal = credito * seguroMensal * prazo;
@@ -105,6 +106,37 @@ const Simulador = () => {
     const parcelaFinanciamento = credito * (taxaFinanciamento * Math.pow(1 + taxaFinanciamento, prazo)) / (Math.pow(1 + taxaFinanciamento, prazo) - 1);
     const totalFinanciamento = parcelaFinanciamento * prazo;
     const economiaVsFinanciamento = totalFinanciamento - totalPagar;
+
+    // Parcelas reduzidas (até contemplação)
+    const parcelaReduzida50 = parcelaMensal * 0.5;
+    const parcelaReduzida70 = parcelaMensal * 0.7;
+
+    // Estudo de lance (percentuais sobre o crédito)
+    const lances = [10, 15, 20, 25, 30].map(percentual => ({
+      percentual,
+      valor: Math.round(credito * (percentual / 100) * 100) / 100,
+      // Após lance embutido, parcela reduz proporcionalmente
+      parcelaPosLance: Math.round(((totalPagar - (credito * percentual / 100)) / prazo) * 100) / 100
+    }));
+
+    // Parcela pós contemplação (considerando diferentes momentos)
+    // Simulação: contemplação no mês 12, 24, 36, 48
+    const parcelasPosContemplacao = [12, 24, 36, 48].map(mesContemplacao => {
+      const parcelasPagas = mesContemplacao;
+      const valorPago = parcelaMensal * parcelasPagas;
+      const saldoDevedor = totalPagar - valorPago;
+      const mesesRestantes = prazo - mesContemplacao;
+      const parcelaPosContemplacao = mesesRestantes > 0 ? saldoDevedor / mesesRestantes : 0;
+
+      return {
+        mesContemplacao,
+        parcelasPagas,
+        valorPago: Math.round(valorPago * 100) / 100,
+        saldoDevedor: Math.round(saldoDevedor * 100) / 100,
+        mesesRestantes,
+        parcelaPosContemplacao: Math.round(parcelaPosContemplacao * 100) / 100
+      };
+    });
 
     return {
       administradora_nome: 'Taxas Personalizadas',
@@ -119,6 +151,11 @@ const Simulador = () => {
       valor_seguro_total: Math.round(valorSeguroTotal * 100) / 100,
       total_pagar: Math.round(totalPagar * 100) / 100,
       parcela_mensal: Math.round(parcelaMensal * 100) / 100,
+      // Novas informações
+      parcela_reduzida_50: Math.round(parcelaReduzida50 * 100) / 100,
+      parcela_reduzida_70: Math.round(parcelaReduzida70 * 100) / 100,
+      lances,
+      parcelas_pos_contemplacao: parcelasPosContemplacao,
       comparativo_financiamento: {
         parcela_financiamento: Math.round(parcelaFinanciamento * 100) / 100,
         total_financiamento: Math.round(totalFinanciamento * 100) / 100,
@@ -145,19 +182,10 @@ const Simulador = () => {
       setCalculando(true);
       setResultado(null);
 
-      // Se usar taxas personalizadas, calcular localmente
-      if (taxasPersonalizadas.usar_personalizadas) {
-        const simulacao = calcularComTaxasPersonalizadas(valorCredito, formData.prazo_meses);
-        setResultado({ simulacao, comparativo: false });
-      } else {
-        const response = await simuladorAPI.calcular({
-          categoria: formData.categoria,
-          administradora_id: formData.administradora_id || null,
-          valor_credito: valorCredito,
-          prazo_meses: parseInt(formData.prazo_meses),
-        });
-        setResultado(response.data?.data);
-      }
+      // Sempre calcular localmente para ter todas as informações
+      const simulacao = calcularComTaxasPersonalizadas(valorCredito, formData.prazo_meses);
+      setResultado({ simulacao, comparativo: false });
+
     } catch (error) {
       console.error('Erro ao calcular simulação:', error);
       toast.error('Erro ao calcular simulação');
@@ -191,7 +219,6 @@ const Simulador = () => {
       setShowCriarLead(false);
       setLeadData({ nome: '', email: '', celular: '' });
 
-      // Perguntar se quer ir para o kanban
       if (window.confirm('Lead criado! Deseja ir para o Kanban?')) {
         navigate('/kanban');
       }
@@ -213,7 +240,6 @@ const Simulador = () => {
     try {
       const sim = resultado?.comparativo ? resultado.simulacoes[0] : resultado?.simulacao;
 
-      // Criar conteúdo HTML para o PDF
       const conteudoHTML = `
         <!DOCTYPE html>
         <html>
@@ -222,82 +248,30 @@ const Simulador = () => {
           <title>Simulação de Consórcio</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body {
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-              padding: 40px;
-              color: #333;
-              background: #fff;
-            }
-            .header {
-              text-align: center;
-              margin-bottom: 30px;
-              padding-bottom: 20px;
-              border-bottom: 3px solid #4F46E5;
-            }
-            .header h1 {
-              color: #4F46E5;
-              font-size: 28px;
-              margin-bottom: 5px;
-            }
-            .header p { color: #666; font-size: 14px; }
-            .section {
-              margin-bottom: 25px;
-              background: #f8f9fa;
-              padding: 20px;
-              border-radius: 10px;
-            }
-            .section-title {
-              font-size: 16px;
-              font-weight: bold;
-              color: #4F46E5;
-              margin-bottom: 15px;
-              padding-bottom: 10px;
-              border-bottom: 1px solid #ddd;
-            }
-            .row {
-              display: flex;
-              justify-content: space-between;
-              padding: 10px 0;
-              border-bottom: 1px solid #eee;
-            }
+            body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 30px; color: #333; background: #fff; font-size: 12px; }
+            .header { text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 3px solid #4F46E5; }
+            .header h1 { color: #4F46E5; font-size: 22px; margin-bottom: 5px; }
+            .header p { color: #666; font-size: 12px; }
+            .section { margin-bottom: 15px; background: #f8f9fa; padding: 15px; border-radius: 8px; }
+            .section-title { font-size: 13px; font-weight: bold; color: #4F46E5; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #ddd; }
+            .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eee; }
             .row:last-child { border-bottom: none; }
             .row .label { color: #666; }
             .row .value { font-weight: bold; color: #333; }
-            .highlight {
-              background: linear-gradient(135deg, #4F46E5, #7C3AED);
-              color: white;
-              padding: 25px;
-              border-radius: 10px;
-              text-align: center;
-              margin-bottom: 25px;
-            }
-            .highlight .parcela { font-size: 36px; font-weight: bold; }
-            .highlight .label { opacity: 0.9; font-size: 14px; }
-            .economia {
-              background: linear-gradient(135deg, #10B981, #059669);
-              color: white;
-              padding: 20px;
-              border-radius: 10px;
-              text-align: center;
-            }
-            .economia .valor { font-size: 28px; font-weight: bold; }
-            .footer {
-              margin-top: 30px;
-              text-align: center;
-              color: #999;
-              font-size: 12px;
-              padding-top: 20px;
-              border-top: 1px solid #eee;
-            }
-            .categoria-badge {
-              display: inline-block;
-              background: #E0E7FF;
-              color: #4F46E5;
-              padding: 5px 15px;
-              border-radius: 20px;
-              font-size: 14px;
-              margin-bottom: 10px;
-            }
+            .highlight { background: linear-gradient(135deg, #4F46E5, #7C3AED); color: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 15px; }
+            .highlight .parcela { font-size: 28px; font-weight: bold; }
+            .highlight .label { opacity: 0.9; font-size: 12px; }
+            .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+            .economia { background: linear-gradient(135deg, #10B981, #059669); color: white; padding: 15px; border-radius: 8px; text-align: center; }
+            .economia .valor { font-size: 20px; font-weight: bold; }
+            .footer { margin-top: 20px; text-align: center; color: #999; font-size: 10px; padding-top: 15px; border-top: 1px solid #eee; }
+            .badge { display: inline-block; background: #E0E7FF; color: #4F46E5; padding: 3px 10px; border-radius: 15px; font-size: 11px; margin-bottom: 8px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; font-size: 11px; }
+            th { background: #f0f0f0; font-weight: bold; }
+            .text-green { color: #10B981; }
+            .text-red { color: #EF4444; }
+            .text-blue { color: #4F46E5; }
           </style>
         </head>
         <body>
@@ -307,66 +281,100 @@ const Simulador = () => {
           </div>
 
           <div class="highlight">
-            <div class="categoria-badge">${sim?.categoria?.toUpperCase() || 'IMÓVEL'}</div>
+            <div class="badge">${sim?.categoria?.toUpperCase() || 'IMÓVEL'}</div>
             <div class="label">Parcela Mensal</div>
             <div class="parcela">${formatarMoeda(sim?.parcela_mensal)}</div>
             <div class="label" style="margin-top: 5px;">em ${sim?.prazo_meses} meses</div>
           </div>
 
-          <div class="section">
-            <div class="section-title">DADOS DA SIMULAÇÃO</div>
-            <div class="row">
-              <span class="label">Administradora</span>
-              <span class="value">${sim?.administradora_nome || 'Não especificada'}</span>
+          <div class="grid-2">
+            <div class="section">
+              <div class="section-title">DADOS DA SIMULAÇÃO</div>
+              <div class="row"><span class="label">Valor do Crédito</span><span class="value">${formatarMoeda(sim?.valor_credito)}</span></div>
+              <div class="row"><span class="label">Prazo</span><span class="value">${sim?.prazo_meses} meses</span></div>
+              <div class="row"><span class="label">Taxa Administrativa</span><span class="value">${sim?.taxa_administracao}%</span></div>
+              <div class="row"><span class="label">Fundo de Reserva</span><span class="value">${sim?.fundo_reserva}%</span></div>
             </div>
-            <div class="row">
-              <span class="label">Valor do Crédito</span>
-              <span class="value">${formatarMoeda(sim?.valor_credito)}</span>
-            </div>
-            <div class="row">
-              <span class="label">Prazo</span>
-              <span class="value">${sim?.prazo_meses} meses</span>
+
+            <div class="section">
+              <div class="section-title">COMPOSIÇÃO DO VALOR</div>
+              <div class="row"><span class="label">Taxa Administrativa</span><span class="value">${formatarMoeda(sim?.valor_taxa_adm)}</span></div>
+              <div class="row"><span class="label">Fundo de Reserva</span><span class="value">${formatarMoeda(sim?.valor_fundo_reserva)}</span></div>
+              <div class="row"><span class="label">Seguro de Vida</span><span class="value">${formatarMoeda(sim?.valor_seguro_total)}</span></div>
+              <div class="row"><span class="label"><strong>TOTAL A PAGAR</strong></span><span class="value text-blue"><strong>${formatarMoeda(sim?.total_pagar)}</strong></span></div>
             </div>
           </div>
 
           <div class="section">
-            <div class="section-title">COMPOSIÇÃO DO VALOR</div>
-            <div class="row">
-              <span class="label">Taxa de Administração (${sim?.taxa_administracao}%)</span>
-              <span class="value">${formatarMoeda(sim?.valor_taxa_adm)}</span>
-            </div>
-            <div class="row">
-              <span class="label">Fundo de Reserva (${sim?.fundo_reserva}%)</span>
-              <span class="value">${formatarMoeda(sim?.valor_fundo_reserva)}</span>
-            </div>
-            <div class="row">
-              <span class="label">Seguro de Vida Total</span>
-              <span class="value">${formatarMoeda(sim?.valor_seguro_total)}</span>
-            </div>
-            <div class="row" style="background: #E0E7FF; margin: 10px -20px -20px; padding: 15px 20px; border-radius: 0 0 10px 10px;">
-              <span class="label" style="font-weight: bold; color: #4F46E5;">TOTAL A PAGAR</span>
-              <span class="value" style="color: #4F46E5; font-size: 18px;">${formatarMoeda(sim?.total_pagar)}</span>
-            </div>
+            <div class="section-title">OPÇÕES DE PARCELAS REDUZIDAS (ATÉ CONTEMPLAÇÃO)</div>
+            <table>
+              <tr>
+                <th>Tipo</th>
+                <th>Percentual</th>
+                <th>Valor da Parcela</th>
+              </tr>
+              <tr>
+                <td>Parcela Integral</td>
+                <td>100%</td>
+                <td><strong>${formatarMoeda(sim?.parcela_mensal)}</strong></td>
+              </tr>
+              <tr>
+                <td>Parcela Reduzida</td>
+                <td>70%</td>
+                <td class="text-green"><strong>${formatarMoeda(sim?.parcela_reduzida_70)}</strong></td>
+              </tr>
+              <tr>
+                <td>Parcela Reduzida</td>
+                <td>50%</td>
+                <td class="text-green"><strong>${formatarMoeda(sim?.parcela_reduzida_50)}</strong></td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="section">
+            <div class="section-title">ESTUDO DE OFERTA DE LANCE</div>
+            <table>
+              <tr>
+                <th>Lance (%)</th>
+                <th>Valor do Lance</th>
+                <th>Parcela Pós Lance</th>
+              </tr>
+              ${sim?.lances?.map(l => `
+                <tr>
+                  <td>${l.percentual}%</td>
+                  <td>${formatarMoeda(l.valor)}</td>
+                  <td class="text-green">${formatarMoeda(l.parcelaPosLance)}</td>
+                </tr>
+              `).join('')}
+            </table>
+          </div>
+
+          <div class="section">
+            <div class="section-title">PARCELAS PÓS CONTEMPLAÇÃO</div>
+            <table>
+              <tr>
+                <th>Contemplação</th>
+                <th>Parcelas Pagas</th>
+                <th>Saldo Devedor</th>
+                <th>Meses Restantes</th>
+                <th>Nova Parcela</th>
+              </tr>
+              ${sim?.parcelas_pos_contemplacao?.map(p => `
+                <tr>
+                  <td>Mês ${p.mesContemplacao}</td>
+                  <td>${p.parcelasPagas}</td>
+                  <td>${formatarMoeda(p.saldoDevedor)}</td>
+                  <td>${p.mesesRestantes}</td>
+                  <td><strong>${formatarMoeda(p.parcelaPosContemplacao)}</strong></td>
+                </tr>
+              `).join('')}
+            </table>
           </div>
 
           <div class="economia">
-            <div style="margin-bottom: 10px; opacity: 0.9;">Economia vs Financiamento (1,5% a.m.)</div>
+            <div style="margin-bottom: 8px; opacity: 0.9;">Economia vs Financiamento (1,5% a.m.)</div>
             <div class="valor">${formatarMoeda(sim?.comparativo_financiamento?.economia)}</div>
-            <div style="font-size: 14px; opacity: 0.9; margin-top: 5px;">
-              (${sim?.comparativo_financiamento?.economia_percentual}% de economia)
-            </div>
-          </div>
-
-          <div class="section" style="margin-top: 25px;">
-            <div class="section-title">COMPARATIVO COM FINANCIAMENTO</div>
-            <div class="row">
-              <span class="label">Parcela do Financiamento</span>
-              <span class="value" style="color: #EF4444;">${formatarMoeda(sim?.comparativo_financiamento?.parcela_financiamento)}</span>
-            </div>
-            <div class="row">
-              <span class="label">Total do Financiamento</span>
-              <span class="value" style="color: #EF4444;">${formatarMoeda(sim?.comparativo_financiamento?.total_financiamento)}</span>
-            </div>
+            <div style="font-size: 12px; opacity: 0.9; margin-top: 5px;">(${sim?.comparativo_financiamento?.economia_percentual}% de economia)</div>
           </div>
 
           <div class="footer">
@@ -377,12 +385,10 @@ const Simulador = () => {
         </html>
       `;
 
-      // Criar uma nova janela para impressão/PDF
       const printWindow = window.open('', '_blank');
       printWindow.document.write(conteudoHTML);
       printWindow.document.close();
 
-      // Aguardar carregar e imprimir
       setTimeout(() => {
         printWindow.print();
         setGerandoPDF(false);
@@ -400,14 +406,14 @@ const Simulador = () => {
       <Navbar />
 
       <div className="ml-20 lg:ml-64 p-6">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Simulador de Consórcio</h1>
-            <p className="text-gray-600 mt-2">Calcule a parcela e compare com financiamento</p>
+            <p className="text-gray-600 mt-2">Calcule parcelas, estude lances e compare com financiamento</p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             {/* Formulário de Simulação */}
             <div className="space-y-6">
               <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -416,47 +422,22 @@ const Simulador = () => {
                 {/* Categoria */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-3">Categoria</label>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     {categorias.map((cat) => (
                       <button
                         key={cat.value}
                         onClick={() => setFormData({ ...formData, categoria: cat.value })}
-                        className={`p-4 rounded-xl border-2 text-center transition-all ${
+                        className={`p-3 rounded-xl border-2 text-center transition-all ${
                           formData.categoria === cat.value
                             ? 'border-primary-500 bg-primary-50 text-primary-700'
                             : 'border-gray-200 hover:border-gray-300'
                         }`}
                       >
-                        <span className="text-2xl block mb-1">{cat.icon}</span>
-                        <span className="text-sm font-medium">{cat.label}</span>
+                        <span className="text-xl block mb-1">{cat.icon}</span>
+                        <span className="text-xs font-medium">{cat.label}</span>
                       </button>
                     ))}
                   </div>
-                </div>
-
-                {/* Administradora */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Administradora (opcional)
-                  </label>
-                  <select
-                    value={formData.administradora_id}
-                    onChange={(e) => setFormData({ ...formData, administradora_id: e.target.value })}
-                    disabled={taxasPersonalizadas.usar_personalizadas}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Comparar todas</option>
-                    {administradoras.map((adm) => (
-                      <option key={adm.id} value={adm.id}>
-                        {adm.nome}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {taxasPersonalizadas.usar_personalizadas
-                      ? 'Desativado - usando taxas personalizadas'
-                      : 'Deixe em branco para comparar todas'}
-                  </p>
                 </div>
 
                 {/* Valor do Crédito */}
@@ -538,24 +519,7 @@ const Simulador = () => {
 
                 {showTaxasPersonalizadas && (
                   <div className="px-6 pb-6 border-t border-gray-100">
-                    {/* Toggle usar personalizadas */}
-                    <div className="flex items-center justify-between py-4">
-                      <span className="text-sm text-gray-600">Usar taxas personalizadas</span>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={taxasPersonalizadas.usar_personalizadas}
-                          onChange={(e) => setTaxasPersonalizadas({
-                            ...taxasPersonalizadas,
-                            usar_personalizadas: e.target.checked
-                          })}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                      </label>
-                    </div>
-
-                    <div className={`space-y-4 ${!taxasPersonalizadas.usar_personalizadas ? 'opacity-50' : ''}`}>
+                    <div className="space-y-4 pt-4">
                       {/* Taxa Administrativa */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -569,11 +533,9 @@ const Simulador = () => {
                             ...taxasPersonalizadas,
                             taxa_administracao: e.target.value
                           })}
-                          disabled={!taxasPersonalizadas.usar_personalizadas}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           placeholder="18"
                         />
-                        <p className="text-xs text-gray-500 mt-1">Ex: 18 para 18%</p>
                       </div>
 
                       {/* Fundo de Reserva */}
@@ -589,11 +551,9 @@ const Simulador = () => {
                             ...taxasPersonalizadas,
                             fundo_reserva: e.target.value
                           })}
-                          disabled={!taxasPersonalizadas.usar_personalizadas}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           placeholder="2"
                         />
-                        <p className="text-xs text-gray-500 mt-1">Ex: 2 para 2%</p>
                       </div>
 
                       {/* Seguro de Vida */}
@@ -609,11 +569,9 @@ const Simulador = () => {
                             ...taxasPersonalizadas,
                             seguro_vida: e.target.value
                           })}
-                          disabled={!taxasPersonalizadas.usar_personalizadas}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           placeholder="0.03"
                         />
-                        <p className="text-xs text-gray-500 mt-1">Ex: 0.03 para 0,03% ao mês</p>
                       </div>
                     </div>
                   </div>
@@ -622,111 +580,273 @@ const Simulador = () => {
             </div>
 
             {/* Resultado da Simulação */}
-            <div className="space-y-6" ref={resultadoRef}>
+            <div className="xl:col-span-2 space-y-6" ref={resultadoRef}>
               {resultado ? (
                 <>
                   {/* Card Principal */}
                   <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl shadow-lg p-6 text-white">
-                    <h3 className="text-lg font-medium opacity-90 mb-4">Resultado da Simulação</h3>
-
-                    {resultado.comparativo ? (
-                      // Comparativo de múltiplas administradoras
-                      <div className="space-y-4">
-                        {resultado.simulacoes.map((sim, index) => (
-                          <div key={index} className={`p-4 rounded-xl ${index === 0 ? 'bg-white/20' : 'bg-white/10'}`}>
-                            <div className="flex justify-between items-center mb-2">
-                              <span className="font-medium">{sim.administradora_nome}</span>
-                              {index === 0 && (
-                                <span className="bg-green-400 text-green-900 text-xs px-2 py-1 rounded-full font-bold">
-                                  MELHOR OPÇÃO
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-3xl font-bold">{formatarMoeda(sim.parcela_mensal)}</div>
-                            <div className="text-sm opacity-80">por mês</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      // Simulação única
+                    <div className="flex justify-between items-start">
                       <div>
-                        <div className="text-sm opacity-80 mb-1">{resultado.simulacao?.administradora_nome}</div>
+                        <div className="text-sm opacity-80 mb-1">{resultado.simulacao?.administradora_nome || 'Simulação Personalizada'}</div>
                         <div className="text-4xl font-bold mb-2">
                           {formatarMoeda(resultado.simulacao?.parcela_mensal)}
                         </div>
-                        <div className="text-sm opacity-80">por mês</div>
+                        <div className="text-sm opacity-80">por mês • {resultado.simulacao?.prazo_meses} parcelas</div>
                       </div>
-                    )}
+                      <div className="text-right">
+                        <div className="bg-white/20 px-3 py-1 rounded-lg text-sm mb-2">
+                          Crédito: {formatarMoeda(resultado.simulacao?.valor_credito)}
+                        </div>
+                        <div className="bg-green-400/30 px-3 py-1 rounded-lg text-sm">
+                          Economia: {formatarMoeda(resultado.simulacao?.comparativo_financiamento?.economia)}
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Detalhes */}
-                  <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Detalhes do Consórcio</h3>
+                  {/* Abas */}
+                  <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                    <div className="flex border-b">
+                      {[
+                        { id: 'resumo', label: 'Resumo' },
+                        { id: 'parcelas', label: 'Parcelas Reduzidas' },
+                        { id: 'lance', label: 'Estudo de Lance' },
+                        { id: 'poscontemplacao', label: 'Pós Contemplação' },
+                      ].map(aba => (
+                        <button
+                          key={aba.id}
+                          onClick={() => setAbaAtiva(aba.id)}
+                          className={`flex-1 py-4 text-sm font-medium transition-colors ${
+                            abaAtiva === aba.id
+                              ? 'text-primary-600 border-b-2 border-primary-600 bg-primary-50'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          {aba.label}
+                        </button>
+                      ))}
+                    </div>
 
-                    {(() => {
-                      const sim = resultado.comparativo ? resultado.simulacoes[0] : resultado.simulacao;
-                      return (
-                        <div className="space-y-3">
-                          <div className="flex justify-between py-2 border-b">
-                            <span className="text-gray-600">Valor do Crédito</span>
-                            <span className="font-semibold">{formatarMoeda(sim?.valor_credito)}</span>
+                    <div className="p-6">
+                      {/* Resumo */}
+                      {abaAtiva === 'resumo' && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-gray-50 rounded-xl p-4">
+                              <div className="text-sm text-gray-500 mb-1">Taxa Administrativa</div>
+                              <div className="text-lg font-bold text-gray-900">{resultado.simulacao?.taxa_administracao}%</div>
+                              <div className="text-sm text-gray-600">{formatarMoeda(resultado.simulacao?.valor_taxa_adm)}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-xl p-4">
+                              <div className="text-sm text-gray-500 mb-1">Fundo de Reserva</div>
+                              <div className="text-lg font-bold text-gray-900">{resultado.simulacao?.fundo_reserva}%</div>
+                              <div className="text-sm text-gray-600">{formatarMoeda(resultado.simulacao?.valor_fundo_reserva)}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-xl p-4">
+                              <div className="text-sm text-gray-500 mb-1">Seguro de Vida Total</div>
+                              <div className="text-lg font-bold text-gray-900">{formatarMoeda(resultado.simulacao?.valor_seguro_total)}</div>
+                              <div className="text-sm text-gray-600">{resultado.simulacao?.seguro_mensal}% ao mês</div>
+                            </div>
+                            <div className="bg-primary-50 rounded-xl p-4">
+                              <div className="text-sm text-primary-600 mb-1">Total a Pagar</div>
+                              <div className="text-lg font-bold text-primary-700">{formatarMoeda(resultado.simulacao?.total_pagar)}</div>
+                              <div className="text-sm text-primary-600">{resultado.simulacao?.prazo_meses} parcelas</div>
+                            </div>
                           </div>
-                          <div className="flex justify-between py-2 border-b">
-                            <span className="text-gray-600">Prazo</span>
-                            <span className="font-semibold">{sim?.prazo_meses} meses</span>
-                          </div>
-                          <div className="flex justify-between py-2 border-b">
-                            <span className="text-gray-600">Taxa de Administração ({sim?.taxa_administracao}%)</span>
-                            <span className="font-semibold">{formatarMoeda(sim?.valor_taxa_adm)}</span>
-                          </div>
-                          <div className="flex justify-between py-2 border-b">
-                            <span className="text-gray-600">Fundo de Reserva ({sim?.fundo_reserva}%)</span>
-                            <span className="font-semibold">{formatarMoeda(sim?.valor_fundo_reserva)}</span>
-                          </div>
-                          <div className="flex justify-between py-2 border-b">
-                            <span className="text-gray-600">Seguro de Vida Total</span>
-                            <span className="font-semibold">{formatarMoeda(sim?.valor_seguro_total)}</span>
-                          </div>
-                          <div className="flex justify-between py-3 bg-gray-50 rounded-lg px-3 -mx-3">
-                            <span className="font-semibold text-gray-900">Total a Pagar</span>
-                            <span className="font-bold text-lg text-primary-600">{formatarMoeda(sim?.total_pagar)}</span>
+
+                          {/* Comparativo */}
+                          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
+                            <div className="flex items-center gap-2 mb-3">
+                              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="font-semibold text-green-800">Comparativo com Financiamento</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4 text-center">
+                              <div>
+                                <div className="text-xs text-gray-500">Parcela Financiamento</div>
+                                <div className="font-bold text-red-600">{formatarMoeda(resultado.simulacao?.comparativo_financiamento?.parcela_financiamento)}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500">Total Financiamento</div>
+                                <div className="font-bold text-red-600">{formatarMoeda(resultado.simulacao?.comparativo_financiamento?.total_financiamento)}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500">Sua Economia</div>
+                                <div className="font-bold text-green-600">{formatarMoeda(resultado.simulacao?.comparativo_financiamento?.economia)}</div>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      );
-                    })()}
-                  </div>
+                      )}
 
-                  {/* Comparativo com Financiamento */}
-                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl shadow-lg p-6 border border-green-200">
-                    <h3 className="text-lg font-semibold text-green-800 mb-4 flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Economia vs Financiamento
-                    </h3>
+                      {/* Parcelas Reduzidas */}
+                      {abaAtiva === 'parcelas' && (
+                        <div className="space-y-4">
+                          <p className="text-gray-600 text-sm mb-4">
+                            Muitas administradoras oferecem a opção de pagar parcelas reduzidas até a contemplação.
+                            Após ser contemplado, o saldo é diluído nas parcelas restantes.
+                          </p>
 
-                    {(() => {
-                      const sim = resultado.comparativo ? resultado.simulacoes[0] : resultado.simulacao;
-                      const comp = sim?.comparativo_financiamento;
-                      return (
-                        <div className="space-y-3">
-                          <div className="flex justify-between py-2">
-                            <span className="text-gray-600">Parcela Financiamento (1,5% a.m.)</span>
-                            <span className="font-semibold text-red-600">{formatarMoeda(comp?.parcela_financiamento)}</span>
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                              <div>
+                                <div className="font-semibold text-gray-900">Parcela Integral (100%)</div>
+                                <div className="text-sm text-gray-500">Valor normal da parcela</div>
+                              </div>
+                              <div className="text-2xl font-bold text-gray-900">
+                                {formatarMoeda(resultado.simulacao?.parcela_mensal)}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-200">
+                              <div>
+                                <div className="font-semibold text-green-800">Parcela Reduzida (70%)</div>
+                                <div className="text-sm text-green-600">Economia de 30% até contemplação</div>
+                              </div>
+                              <div className="text-2xl font-bold text-green-700">
+                                {formatarMoeda(resultado.simulacao?.parcela_reduzida_70)}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                              <div>
+                                <div className="font-semibold text-emerald-800">Parcela Reduzida (50%)</div>
+                                <div className="text-sm text-emerald-600">Economia de 50% até contemplação</div>
+                              </div>
+                              <div className="text-2xl font-bold text-emerald-700">
+                                {formatarMoeda(resultado.simulacao?.parcela_reduzida_50)}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex justify-between py-2">
-                            <span className="text-gray-600">Total Financiamento</span>
-                            <span className="font-semibold text-red-600">{formatarMoeda(comp?.total_financiamento)}</span>
-                          </div>
-                          <div className="flex justify-between py-3 bg-green-100 rounded-lg px-3 -mx-3">
-                            <span className="font-semibold text-green-800">Sua Economia</span>
-                            <span className="font-bold text-xl text-green-600">
-                              {formatarMoeda(comp?.economia)} ({comp?.economia_percentual}%)
-                            </span>
+
+                          <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
+                            <div className="flex items-start gap-2">
+                              <svg className="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <div>
+                                <div className="font-medium text-yellow-800">Importante</div>
+                                <div className="text-sm text-yellow-700">
+                                  Ao optar por parcela reduzida, o saldo não pago é acumulado e será diluído nas parcelas
+                                  após a contemplação, aumentando o valor da parcela pós-contemplação.
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      );
-                    })()}
+                      )}
+
+                      {/* Estudo de Lance */}
+                      {abaAtiva === 'lance' && (
+                        <div className="space-y-4">
+                          <p className="text-gray-600 text-sm mb-4">
+                            Lance é um valor que você oferece para antecipar sua contemplação.
+                            O valor do lance é abatido do seu crédito ou pode ser pago à parte (lance embutido).
+                          </p>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead>
+                                <tr className="bg-gray-50">
+                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Lance</th>
+                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor do Lance</th>
+                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Parcela Após Lance*</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {resultado.simulacao?.lances?.map((lance, idx) => (
+                                  <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                    <td className="px-4 py-3">
+                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                                        {lance.percentual}%
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 font-semibold text-gray-900">
+                                      {formatarMoeda(lance.valor)}
+                                    </td>
+                                    <td className="px-4 py-3 font-semibold text-green-600">
+                                      {formatarMoeda(lance.parcelaPosLance)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="text-xs text-gray-500 mt-2">
+                            * Parcela considerando lance embutido (valor abatido do saldo devedor)
+                          </div>
+
+                          <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                            <div className="flex items-start gap-2">
+                              <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                              </svg>
+                              <div>
+                                <div className="font-medium text-blue-800">Dica</div>
+                                <div className="text-sm text-blue-700">
+                                  Lances entre 20% e 30% do crédito costumam ter boas chances de contemplação em assembleias.
+                                  Consulte o histórico de lances vencedores da administradora.
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Pós Contemplação */}
+                      {abaAtiva === 'poscontemplacao' && (
+                        <div className="space-y-4">
+                          <p className="text-gray-600 text-sm mb-4">
+                            Simulação de como ficará sua parcela após ser contemplado em diferentes momentos do plano.
+                          </p>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead>
+                                <tr className="bg-gray-50">
+                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Contemplação</th>
+                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Parcelas Pagas</th>
+                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor Pago</th>
+                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Saldo Devedor</th>
+                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Meses Restantes</th>
+                                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nova Parcela</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {resultado.simulacao?.parcelas_pos_contemplacao?.map((item, idx) => (
+                                  <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                    <td className="px-4 py-3">
+                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                        Mês {item.mesContemplacao}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-900">{item.parcelasPagas}</td>
+                                    <td className="px-4 py-3 text-gray-900">{formatarMoeda(item.valorPago)}</td>
+                                    <td className="px-4 py-3 text-gray-900">{formatarMoeda(item.saldoDevedor)}</td>
+                                    <td className="px-4 py-3 text-gray-900">{item.mesesRestantes}</td>
+                                    <td className="px-4 py-3 font-bold text-primary-600">{formatarMoeda(item.parcelaPosContemplacao)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="bg-gray-50 rounded-xl p-4">
+                            <div className="flex items-start gap-2">
+                              <svg className="w-5 h-5 text-gray-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <div className="text-sm text-gray-600">
+                                <strong>Observação:</strong> Estes valores são estimativas considerando parcela integral até a contemplação.
+                                Parcelas reduzidas ou lances podem alterar estes valores.
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Ações */}
@@ -756,12 +876,15 @@ const Simulador = () => {
                     </button>
                     <button
                       onClick={() => {
-                        const sim = resultado.comparativo ? resultado.simulacoes[0] : resultado.simulacao;
+                        const sim = resultado.simulacao;
                         const texto = `*SIMULAÇÃO DE CONSÓRCIO*\n\n` +
                           `📊 *${sim?.categoria?.toUpperCase()}*\n` +
                           `💰 Crédito: ${formatarMoeda(sim?.valor_credito)}\n` +
                           `📅 Prazo: ${sim?.prazo_meses} meses\n` +
                           `💵 Parcela: *${formatarMoeda(sim?.parcela_mensal)}*\n\n` +
+                          `📉 *Opções de Parcela Reduzida:*\n` +
+                          `• 70%: ${formatarMoeda(sim?.parcela_reduzida_70)}\n` +
+                          `• 50%: ${formatarMoeda(sim?.parcela_reduzida_50)}\n\n` +
                           `✅ Economia vs Financiamento: ${formatarMoeda(sim?.comparativo_financiamento?.economia)}\n\n` +
                           `_Simulação feita pelo Cflow CRM_`;
                         const url = `https://wa.me/?text=${encodeURIComponent(texto)}`;
@@ -776,7 +899,6 @@ const Simulador = () => {
                   </div>
                 </>
               ) : (
-                // Estado vazio
                 <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
                   <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <svg className="w-10 h-10 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -785,7 +907,7 @@ const Simulador = () => {
                   </div>
                   <h3 className="text-lg font-semibold text-gray-800 mb-2">Faça sua Simulação</h3>
                   <p className="text-gray-600">
-                    Preencha os dados ao lado e clique em "Calcular Simulação" para ver os resultados.
+                    Preencha os dados ao lado e clique em "Calcular Simulação" para ver os resultados completos.
                   </p>
                 </div>
               )}
