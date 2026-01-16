@@ -1156,7 +1156,7 @@ const SimuladorV2 = () => {
                 onClick={calcular}
                 className="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
               >
-                Calcular
+                Simular
               </button>
             </div>
 
@@ -1397,7 +1397,7 @@ const SimuladorV2 = () => {
                   <div className="text-6xl mb-4">📋</div>
                   <h3 className="text-xl font-semibold text-gray-800 mb-2">Simulador de Consórcio</h3>
                   <p className="text-gray-600">
-                    Preencha os dados ao lado e clique em "Calcular" para ver o resultado.
+                    Preencha os dados ao lado e clique em "Simular" para ver o resultado.
                   </p>
                 </div>
               )}
