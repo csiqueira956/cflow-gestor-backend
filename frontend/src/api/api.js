@@ -200,6 +200,12 @@ export const superAdminAPI = {
 
   // Dashboard Super Admin
   dashboard: () => api.get('/admin/dashboard'),
+  mrrHistory: (months = 12) => api.get('/admin/dashboard/mrr-history', { params: { months } }),
+
+  // Export de dados
+  exportEmpresas: () => api.get('/admin/export/empresas', { responseType: 'blob' }),
+  exportUsuarios: () => api.get('/admin/export/usuarios', { responseType: 'blob' }),
+  exportFinanceiro: () => api.get('/admin/export/financeiro', { responseType: 'blob' }),
 };
 
 export default api;
