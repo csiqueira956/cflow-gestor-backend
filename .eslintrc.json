@@ -1,30 +1,18 @@
 {
   "env": {
-    "browser": true,
+    "node": true,
     "es2022": true
   },
   "extends": [
     "eslint:recommended",
-    "plugin:react/recommended",
-    "plugin:react-hooks/recommended",
     "prettier"
   ],
   "plugins": [
-    "react",
-    "react-hooks",
     "prettier"
   ],
   "parserOptions": {
     "ecmaVersion": "latest",
-    "sourceType": "module",
-    "ecmaFeatures": {
-      "jsx": true
-    }
-  },
-  "settings": {
-    "react": {
-      "version": "detect"
-    }
+    "sourceType": "module"
   },
   "rules": {
     "prettier/prettier": ["error", {
@@ -38,12 +26,10 @@
       "argsIgnorePattern": "^_",
       "varsIgnorePattern": "^_"
     }],
-    "no-console": "warn",
-    "react/react-in-jsx-scope": "off",
-    "react/prop-types": "warn",
-    "react-hooks/rules-of-hooks": "error",
-    "react-hooks/exhaustive-deps": "warn",
+    "no-console": "off",
     "prefer-const": "error",
-    "no-var": "error"
+    "no-var": "error",
+    "arrow-body-style": ["error", "as-needed"],
+    "prefer-arrow-callback": "error"
   }
 }

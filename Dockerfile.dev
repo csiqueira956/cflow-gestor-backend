@@ -1,21 +1,24 @@
-# Dockerfile de Desenvolvimento - Frontend
-# Com Vite hot-reload
+# Dockerfile de Desenvolvimento - Backend
+# Com hot-reload e ferramentas de debug
 
 FROM node:18-alpine
+
+# Instalar ferramentas úteis para desenvolvimento
+RUN apk add --no-cache curl
 
 WORKDIR /app
 
 # Copiar package files
 COPY package*.json ./
 
-# Instalar dependências
+# Instalar TODAS as dependências (incluindo dev)
 RUN npm install
 
 # Copiar código fonte
 COPY . .
 
-# Expor porta do Vite
-EXPOSE 3000
+# Expor porta
+EXPOSE 3001
 
-# Modo desenvolvimento com hot reload
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+# Modo desenvolvimento com nodemon (hot reload)
+CMD ["npm", "run", "dev"]

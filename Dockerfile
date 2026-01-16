@@ -1,5 +1,5 @@
-# Dockerfile de Produção - Frontend
-# Multi-stage build com Nginx
+# Dockerfile de Produção - Backend
+# Multi-stage build para otimizar tamanho da imagem
 
 # Stage 1: Build
 FROM node:18-alpine AS builder
@@ -9,45 +9,42 @@ WORKDIR /app
 # Copiar package files
 COPY package*.json ./
 
-# Instalar dependências
-RUN npm ci && npm cache clean --force
+# Instalar apenas dependências de produção
+RUN npm ci --only=production && \
+    npm cache clean --force
 
 # Copiar código fonte
 COPY . .
 
-# Build para produção
-ARG VITE_API_URL
-ENV VITE_API_URL=${VITE_API_URL}
+# Stage 2: Production
+FROM node:18-alpine
 
-RUN npm run build
-
-# Stage 2: Production com Nginx
-FROM nginx:alpine
-
-# Copiar configuração customizada do Nginx
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copiar build do stage anterior
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Variáveis de ambiente de build
+ARG NODE_ENV=production
+ENV NODE_ENV=${NODE_ENV}
 
 # Criar usuário não-root
-RUN addgroup -g 1001 -S nginx && \
-    adduser -S nginx -u 1001 && \
-    chown -R nginx:nginx /usr/share/nginx/html && \
-    chown -R nginx:nginx /var/cache/nginx && \
-    chown -R nginx:nginx /var/log/nginx && \
-    chown -R nginx:nginx /etc/nginx/conf.d && \
-    touch /var/run/nginx.pid && \
-    chown -R nginx:nginx /var/run/nginx.pid
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
 
-USER nginx
+WORKDIR /app
+
+# Copiar node_modules e código do builder
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --chown=nodejs:nodejs . .
+
+# Criar diretório para database (se usar SQLite em dev)
+RUN mkdir -p /app/database && chown -R nodejs:nodejs /app/database
+
+# Trocar para usuário não-root
+USER nodejs
 
 # Expor porta
-EXPOSE 80
+EXPOSE 3001
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Iniciar Nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Comando de inicialização
+CMD ["npm", "start"]
