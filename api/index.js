@@ -3937,6 +3937,324 @@ function mapAsaasStatus(asaasStatus) {
   return statusMap[asaasStatus] || 'pending';
 }
 
+// ============================================
+// SIMULADOR DE CONSÓRCIO
+// ============================================
+
+// Listar taxas de simulação das administradoras
+app.get('/api/simulador/taxas', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    const result = await pool.query(`
+      SELECT
+        st.*,
+        a.nome as administradora_nome
+      FROM simulador_taxas st
+      JOIN administradoras a ON st.administradora_id = a.id
+      WHERE st.company_id = $1
+      ORDER BY a.nome, st.categoria
+    `, [decoded.company_id]);
+
+    res.json({ data: { taxas: result.rows } });
+  } catch (error) {
+    console.error('Erro ao listar taxas:', error);
+    res.status(500).json({ error: 'Erro ao listar taxas de simulação' });
+  }
+});
+
+// Criar/Atualizar taxa de simulação
+app.post('/api/simulador/taxas', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const {
+      administradora_id,
+      categoria,
+      taxa_administracao,
+      fundo_reserva,
+      seguro_mensal,
+      prazo_minimo,
+      prazo_maximo,
+      credito_minimo,
+      credito_maximo
+    } = req.body;
+
+    if (!administradora_id || !categoria || taxa_administracao === undefined) {
+      return res.status(400).json({ error: 'Administradora, categoria e taxa de administração são obrigatórios' });
+    }
+
+    // Verificar se já existe e atualizar, senão criar
+    const existing = await pool.query(
+      'SELECT id FROM simulador_taxas WHERE administradora_id = $1 AND categoria = $2 AND company_id = $3',
+      [administradora_id, categoria, decoded.company_id]
+    );
+
+    let result;
+    if (existing.rows.length > 0) {
+      result = await pool.query(`
+        UPDATE simulador_taxas SET
+          taxa_administracao = $1,
+          fundo_reserva = $2,
+          seguro_mensal = $3,
+          prazo_minimo = $4,
+          prazo_maximo = $5,
+          credito_minimo = $6,
+          credito_maximo = $7,
+          updated_at = NOW()
+        WHERE id = $8
+        RETURNING *
+      `, [
+        taxa_administracao,
+        fundo_reserva || 0,
+        seguro_mensal || 0,
+        prazo_minimo || 12,
+        prazo_maximo || 200,
+        credito_minimo || 0,
+        credito_maximo || 9999999999,
+        existing.rows[0].id
+      ]);
+    } else {
+      result = await pool.query(`
+        INSERT INTO simulador_taxas (
+          administradora_id, categoria, taxa_administracao, fundo_reserva, seguro_mensal,
+          prazo_minimo, prazo_maximo, credito_minimo, credito_maximo, company_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING *
+      `, [
+        administradora_id,
+        categoria,
+        taxa_administracao,
+        fundo_reserva || 0,
+        seguro_mensal || 0,
+        prazo_minimo || 12,
+        prazo_maximo || 200,
+        credito_minimo || 0,
+        credito_maximo || 9999999999,
+        decoded.company_id
+      ]);
+    }
+
+    res.status(201).json({ message: 'Taxa salva com sucesso', taxa: result.rows[0] });
+  } catch (error) {
+    console.error('Erro ao salvar taxa:', error);
+    res.status(500).json({ error: 'Erro ao salvar taxa de simulação' });
+  }
+});
+
+// Deletar taxa de simulação
+app.delete('/api/simulador/taxas/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM simulador_taxas WHERE id = $1 AND company_id = $2 RETURNING id',
+      [id, decoded.company_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Taxa não encontrada' });
+    }
+
+    res.json({ message: 'Taxa deletada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao deletar taxa:', error);
+    res.status(500).json({ error: 'Erro ao deletar taxa' });
+  }
+});
+
+// Executar simulação de consórcio
+app.post('/api/simulador/calcular', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { administradora_id, categoria, valor_credito, prazo_meses } = req.body;
+
+    if (!valor_credito || !prazo_meses) {
+      return res.status(400).json({ error: 'Valor do crédito e prazo são obrigatórios' });
+    }
+
+    // Se administradora_id fornecido, buscar taxas específicas
+    let taxas;
+    if (administradora_id) {
+      const result = await pool.query(`
+        SELECT st.*, a.nome as administradora_nome
+        FROM simulador_taxas st
+        JOIN administradoras a ON st.administradora_id = a.id
+        WHERE st.administradora_id = $1 AND st.categoria = $2 AND st.company_id = $3
+      `, [administradora_id, categoria || 'imovel', decoded.company_id]);
+
+      if (result.rows.length === 0) {
+        // Usar taxas padrão se não encontrar
+        taxas = {
+          taxa_administracao: 18,
+          fundo_reserva: 2,
+          seguro_mensal: 0.03,
+          administradora_nome: 'Padrão'
+        };
+      } else {
+        taxas = result.rows[0];
+      }
+    } else {
+      // Buscar todas as administradoras com taxas configuradas para comparativo
+      const result = await pool.query(`
+        SELECT st.*, a.nome as administradora_nome
+        FROM simulador_taxas st
+        JOIN administradoras a ON st.administradora_id = a.id
+        WHERE st.categoria = $1 AND st.company_id = $2
+        AND st.prazo_minimo <= $3 AND st.prazo_maximo >= $3
+        AND st.credito_minimo <= $4 AND st.credito_maximo >= $4
+        ORDER BY st.taxa_administracao ASC
+      `, [categoria || 'imovel', decoded.company_id, prazo_meses, valor_credito]);
+
+      if (result.rows.length === 0) {
+        taxas = [{
+          taxa_administracao: 18,
+          fundo_reserva: 2,
+          seguro_mensal: 0.03,
+          administradora_nome: 'Padrão'
+        }];
+      } else {
+        taxas = result.rows;
+      }
+    }
+
+    // Função para calcular simulação
+    const calcularSimulacao = (taxaConfig) => {
+      const credito = parseFloat(valor_credito);
+      const prazo = parseInt(prazo_meses);
+      const taxaAdm = parseFloat(taxaConfig.taxa_administracao) / 100;
+      const fundoReserva = parseFloat(taxaConfig.fundo_reserva || 0) / 100;
+      const seguroMensal = parseFloat(taxaConfig.seguro_mensal || 0) / 100;
+
+      // Cálculos
+      const valorTaxaAdm = credito * taxaAdm;
+      const valorFundoReserva = credito * fundoReserva;
+      const valorSeguroTotal = credito * seguroMensal * prazo;
+      const totalPagar = credito + valorTaxaAdm + valorFundoReserva + valorSeguroTotal;
+      const parcelaMensal = totalPagar / prazo;
+
+      // Comparativo com financiamento (estimativa com juros de 1.5% a.m.)
+      const taxaFinanciamento = 0.015;
+      const parcelaFinanciamento = credito * (taxaFinanciamento * Math.pow(1 + taxaFinanciamento, prazo)) / (Math.pow(1 + taxaFinanciamento, prazo) - 1);
+      const totalFinanciamento = parcelaFinanciamento * prazo;
+      const economiaVsFinanciamento = totalFinanciamento - totalPagar;
+
+      return {
+        administradora_id: taxaConfig.administradora_id,
+        administradora_nome: taxaConfig.administradora_nome,
+        categoria: categoria || 'imovel',
+        valor_credito: credito,
+        prazo_meses: prazo,
+        taxa_administracao: taxaConfig.taxa_administracao,
+        fundo_reserva: taxaConfig.fundo_reserva || 0,
+        seguro_mensal: taxaConfig.seguro_mensal || 0,
+        valor_taxa_adm: Math.round(valorTaxaAdm * 100) / 100,
+        valor_fundo_reserva: Math.round(valorFundoReserva * 100) / 100,
+        valor_seguro_total: Math.round(valorSeguroTotal * 100) / 100,
+        total_pagar: Math.round(totalPagar * 100) / 100,
+        parcela_mensal: Math.round(parcelaMensal * 100) / 100,
+        comparativo_financiamento: {
+          parcela_financiamento: Math.round(parcelaFinanciamento * 100) / 100,
+          total_financiamento: Math.round(totalFinanciamento * 100) / 100,
+          economia: Math.round(economiaVsFinanciamento * 100) / 100,
+          economia_percentual: Math.round((economiaVsFinanciamento / totalFinanciamento) * 10000) / 100
+        }
+      };
+    };
+
+    // Retornar simulações
+    if (Array.isArray(taxas)) {
+      const simulacoes = taxas.map(calcularSimulacao);
+      res.json({ data: { simulacoes, comparativo: true } });
+    } else {
+      const simulacao = calcularSimulacao(taxas);
+      res.json({ data: { simulacao, comparativo: false } });
+    }
+
+  } catch (error) {
+    console.error('Erro ao calcular simulação:', error);
+    res.status(500).json({ error: 'Erro ao calcular simulação' });
+  }
+});
+
+// Criar lead a partir de simulação
+app.post('/api/simulador/criar-lead', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const {
+      nome,
+      email,
+      celular,
+      simulacao_dados,
+      administradora_id
+    } = req.body;
+
+    if (!nome) {
+      return res.status(400).json({ error: 'Nome é obrigatório' });
+    }
+
+    // Criar cliente com dados da simulação nas observações
+    const observacoes = simulacao_dados ?
+      `SIMULAÇÃO REALIZADA:\n` +
+      `- Crédito: R$ ${simulacao_dados.valor_credito?.toLocaleString('pt-BR')}\n` +
+      `- Prazo: ${simulacao_dados.prazo_meses} meses\n` +
+      `- Parcela: R$ ${simulacao_dados.parcela_mensal?.toLocaleString('pt-BR')}\n` +
+      `- Administradora: ${simulacao_dados.administradora_nome}\n` +
+      `- Categoria: ${simulacao_dados.categoria}` : '';
+
+    const result = await pool.query(`
+      INSERT INTO clientes (
+        nome, email, celular, vendedor_id, company_id, etapa,
+        administradora_id, valor_credito, observacoes, origem
+      ) VALUES ($1, $2, $3, $4, $5, 'novo_contato', $6, $7, $8, 'simulador')
+      RETURNING *
+    `, [
+      nome,
+      email || null,
+      celular || null,
+      decoded.id,
+      decoded.company_id,
+      administradora_id || null,
+      simulacao_dados?.valor_credito || null,
+      observacoes
+    ]);
+
+    res.status(201).json({
+      message: 'Lead criado com sucesso',
+      cliente: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Erro ao criar lead:', error);
+    res.status(500).json({ error: 'Erro ao criar lead' });
+  }
+});
+
 // Tratamento de erros 404
 app.use((req, res) => {
   res.status(404).json({ error: 'Rota não encontrada' });
