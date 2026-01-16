@@ -152,17 +152,35 @@ const Simulador = () => {
     // Estudo de lance por percentuais
     const lances = percentuaisLances.sort((a, b) => a - b).map(percentual => {
       const valorLance = credito * (percentual / 100);
-      // Lance pode ser composto de: recurso próprio + lance embutido
-      const lanceEmbutidoNecessario = Math.max(0, valorLance - recursoProprioValor);
+
+      // Prioridade: 1º usa recurso próprio, 2º usa lance embutido (máx 30%)
       const usaRecursoProprio = Math.min(recursoProprioValor, valorLance);
+      const restanteAposRecursoProprio = Math.max(0, valorLance - recursoProprioValor);
+
+      // Lance embutido limitado a 30% do crédito
+      const lanceEmbutidoUsado = Math.min(restanteAposRecursoProprio, lanceEmbutidoMax);
+
+      // Verifica se lance é viável (recurso próprio + embutido cobre o lance)
+      const lanceMaximoPossivel = recursoProprioValor + lanceEmbutidoMax;
+      const lanceViavel = valorLance <= lanceMaximoPossivel;
+      const faltaParaLance = Math.max(0, valorLance - lanceMaximoPossivel);
+
+      // Crédito líquido após usar lance embutido (o que sobra para comprar o bem)
+      const creditoLiquido = credito - lanceEmbutidoUsado;
+
+      // Nova parcela pós-contemplação (saldo devedor reduz pelo lance embutido)
+      const saldoAposLance = totalPagar - lanceEmbutidoUsado;
+      const parcelaPosLance = saldoAposLance / prazo;
 
       return {
         percentual,
         valor: Math.round(valorLance * 100) / 100,
         recurso_proprio_usado: Math.round(usaRecursoProprio * 100) / 100,
-        lance_embutido_usado: Math.round(lanceEmbutidoNecessario * 100) / 100,
-        // Após lance embutido, parcela reduz proporcionalmente
-        parcelaPosLance: Math.round(((totalPagar - lanceEmbutidoNecessario) / prazo) * 100) / 100
+        lance_embutido_usado: Math.round(lanceEmbutidoUsado * 100) / 100,
+        credito_liquido: Math.round(creditoLiquido * 100) / 100,
+        lance_viavel: lanceViavel,
+        falta_para_lance: Math.round(faltaParaLance * 100) / 100,
+        parcelaPosLance: Math.round(parcelaPosLance * 100) / 100
       };
     });
 
@@ -1110,39 +1128,57 @@ const Simulador = () => {
                               <thead>
                                 <tr className="bg-gray-50">
                                   <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Lance</th>
-                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor Total</th>
-                                  {resultado.simulacao?.recurso_proprio > 0 && (
-                                    <>
-                                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rec. Próprio</th>
-                                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Embutido</th>
-                                    </>
-                                  )}
-                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Parcela Pós*</th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor</th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rec. Próprio</th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Embutido</th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Parcela Pós</th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {resultado.simulacao?.lances?.map((lance, idx) => (
-                                  <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                  <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${!lance.lance_viavel ? 'opacity-60' : ''}`}>
                                     <td className="px-3 py-3">
-                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                        lance.lance_viavel ? 'bg-primary-100 text-primary-800' : 'bg-red-100 text-red-800'
+                                      }`}>
                                         {lance.percentual}%
                                       </span>
                                     </td>
                                     <td className="px-3 py-3 font-semibold text-gray-900">
                                       {formatarMoeda(lance.valor)}
                                     </td>
-                                    {resultado.simulacao?.recurso_proprio > 0 && (
-                                      <>
-                                        <td className="px-3 py-3 text-blue-600 text-sm">
-                                          {formatarMoeda(lance.recurso_proprio_usado)}
-                                        </td>
-                                        <td className="px-3 py-3 text-purple-600 text-sm">
-                                          {formatarMoeda(lance.lance_embutido_usado)}
-                                        </td>
-                                      </>
-                                    )}
+                                    <td className="px-3 py-3 text-blue-600 text-sm">
+                                      {formatarMoeda(lance.recurso_proprio_usado)}
+                                    </td>
+                                    <td className="px-3 py-3 text-purple-600 text-sm">
+                                      {formatarMoeda(lance.lance_embutido_usado)}
+                                      {lance.lance_embutido_usado >= resultado.simulacao?.valor_credito * 0.30 && (
+                                        <span className="ml-1 text-xs text-orange-500">(máx)</span>
+                                      )}
+                                    </td>
                                     <td className="px-3 py-3 font-semibold text-green-600">
                                       {formatarMoeda(lance.parcelaPosLance)}
+                                    </td>
+                                    <td className="px-3 py-3">
+                                      {lance.lance_viavel ? (
+                                        <span className="inline-flex items-center gap-1 text-green-600 text-xs">
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                          </svg>
+                                          Viável
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex flex-col text-red-600 text-xs">
+                                          <span className="flex items-center gap-1">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                            Falta
+                                          </span>
+                                          <span className="font-semibold">{formatarMoeda(lance.falta_para_lance)}</span>
+                                        </span>
+                                      )}
                                     </td>
                                   </tr>
                                 ))}
@@ -1150,8 +1186,9 @@ const Simulador = () => {
                             </table>
                           </div>
 
-                          <div className="text-xs text-gray-500 mt-2">
-                            * Parcela considerando lance embutido (valor abatido do saldo devedor)
+                          <div className="text-xs text-gray-500 mt-2 space-y-1">
+                            <p>* Parcela pós-lance: considera lance embutido abatido do saldo devedor</p>
+                            <p>* Lance embutido máximo: 30% do crédito ({formatarMoeda(resultado.simulacao?.valor_credito * 0.30)})</p>
                           </div>
 
                           <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
