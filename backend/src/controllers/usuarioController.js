@@ -115,6 +115,58 @@ export const buscarUsuario = async (req, res) => {
   }
 };
 
+// Criar usuário (apenas admin)
+export const criarUsuario = async (req, res) => {
+  try {
+    const { company_id } = req.user;
+    const companyId = req.companyId || company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const { nome, email, senha, role, tipo_usuario, percentual_comissao, celular, equipe, equipe_id } = req.body;
+
+    // Validações
+    if (!nome || !email || !senha) {
+      return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+    }
+
+    if (senha.length < 6) {
+      return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres' });
+    }
+
+    // Verificar se o email já existe
+    const usuarioExistente = await Usuario.findByEmail(email);
+    if (usuarioExistente) {
+      return res.status(400).json({ error: 'Este email já está cadastrado' });
+    }
+
+    // Hash da senha
+    const senhaHash = await bcrypt.hash(senha, 10);
+
+    // Criar novo usuário
+    const novoUsuario = await Usuario.create({
+      nome,
+      email,
+      senha_hash: senhaHash,
+      role: role || 'vendedor',
+      tipo_usuario,
+      percentual_comissao,
+      celular,
+      equipe_id: equipe_id ? parseInt(equipe_id, 10) : (equipe ? parseInt(equipe, 10) : null)
+    }, companyId);
+
+    res.status(201).json({
+      message: 'Usuário criado com sucesso',
+      usuario: novoUsuario
+    });
+  } catch (error) {
+    console.error('Erro ao criar usuário:', error);
+    res.status(500).json({ error: 'Erro ao criar usuário' });
+  }
+};
+
 // Atualizar usuário (apenas admin)
 export const atualizarUsuario = async (req, res) => {
   try {
