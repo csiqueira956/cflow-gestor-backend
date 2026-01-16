@@ -1400,13 +1400,10 @@ const SimuladorV2 = () => {
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
-                  <div className="text-6xl mb-4">📊</div>
-                  <h3 className="text-xl font-semibold text-gray-800 mb-2">Simulador V2</h3>
+                  <div className="text-6xl mb-4">📋</div>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">Simulador de Consórcio</h3>
                   <p className="text-gray-600">
-                    Esta versão implementa a lógica do documento com:<br/>
-                    • Piso de 50% na parcela pós-contemplação<br/>
-                    • Taxa de adesão (SEM, À Vista, Diluída)<br/>
-                    • Campanha Parcela Original
+                    Preencha os dados ao lado e clique em "Calcular" para ver o resultado.
                   </p>
                 </div>
               )}
