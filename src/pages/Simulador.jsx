@@ -32,6 +32,12 @@ const Simulador = () => {
     seguro_vida: '0.03',
   });
 
+  // Percentuais personalizáveis
+  const [percentuaisReduzidos, setPercentuaisReduzidos] = useState([50, 70]);
+  const [percentuaisLances, setPercentuaisLances] = useState([10, 15, 20, 25, 30]);
+  const [novoPercentualReduzido, setNovoPercentualReduzido] = useState('');
+  const [novoPercentualLance, setNovoPercentualLance] = useState('');
+
   const [leadData, setLeadData] = useState({
     nome: '',
     email: '',
@@ -107,12 +113,15 @@ const Simulador = () => {
     const totalFinanciamento = parcelaFinanciamento * prazo;
     const economiaVsFinanciamento = totalFinanciamento - totalPagar;
 
-    // Parcelas reduzidas (até contemplação)
-    const parcelaReduzida50 = parcelaMensal * 0.5;
-    const parcelaReduzida70 = parcelaMensal * 0.7;
+    // Parcelas reduzidas (até contemplação) - usando percentuais personalizados
+    const parcelasReduzidas = percentuaisReduzidos.sort((a, b) => b - a).map(percentual => ({
+      percentual,
+      valor: Math.round(parcelaMensal * (percentual / 100) * 100) / 100,
+      economia: 100 - percentual
+    }));
 
-    // Estudo de lance (percentuais sobre o crédito)
-    const lances = [10, 15, 20, 25, 30].map(percentual => ({
+    // Estudo de lance (percentuais sobre o crédito) - usando percentuais personalizados
+    const lances = percentuaisLances.sort((a, b) => a - b).map(percentual => ({
       percentual,
       valor: Math.round(credito * (percentual / 100) * 100) / 100,
       // Após lance embutido, parcela reduz proporcionalmente
@@ -152,8 +161,7 @@ const Simulador = () => {
       total_pagar: Math.round(totalPagar * 100) / 100,
       parcela_mensal: Math.round(parcelaMensal * 100) / 100,
       // Novas informações
-      parcela_reduzida_50: Math.round(parcelaReduzida50 * 100) / 100,
-      parcela_reduzida_70: Math.round(parcelaReduzida70 * 100) / 100,
+      parcelas_reduzidas: parcelasReduzidas,
       lances,
       parcelas_pos_contemplacao: parcelasPosContemplacao,
       comparativo_financiamento: {
@@ -318,16 +326,13 @@ const Simulador = () => {
                 <td>100%</td>
                 <td><strong>${formatarMoeda(sim?.parcela_mensal)}</strong></td>
               </tr>
-              <tr>
-                <td>Parcela Reduzida</td>
-                <td>70%</td>
-                <td class="text-green"><strong>${formatarMoeda(sim?.parcela_reduzida_70)}</strong></td>
-              </tr>
-              <tr>
-                <td>Parcela Reduzida</td>
-                <td>50%</td>
-                <td class="text-green"><strong>${formatarMoeda(sim?.parcela_reduzida_50)}</strong></td>
-              </tr>
+              ${sim?.parcelas_reduzidas?.map(p => `
+                <tr>
+                  <td>Parcela Reduzida</td>
+                  <td>${p.percentual}%</td>
+                  <td class="text-green"><strong>${formatarMoeda(p.valor)}</strong></td>
+                </tr>
+              `).join('')}
             </table>
           </div>
 
@@ -573,6 +578,102 @@ const Simulador = () => {
                           placeholder="0.03"
                         />
                       </div>
+
+                      {/* Percentuais de Parcelas Reduzidas */}
+                      <div className="pt-4 border-t border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Parcelas Reduzidas (%)
+                        </label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {percentuaisReduzidos.map((p) => (
+                            <span
+                              key={p}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm"
+                            >
+                              {p}%
+                              <button
+                                onClick={() => setPercentuaisReduzidos(percentuaisReduzidos.filter(x => x !== p))}
+                                className="hover:text-red-600"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="99"
+                            value={novoPercentualReduzido}
+                            onChange={(e) => setNovoPercentualReduzido(e.target.value)}
+                            placeholder="Ex: 60"
+                            className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                          />
+                          <button
+                            onClick={() => {
+                              const valor = parseInt(novoPercentualReduzido);
+                              if (valor > 0 && valor < 100 && !percentuaisReduzidos.includes(valor)) {
+                                setPercentuaisReduzidos([...percentuaisReduzidos, valor]);
+                                setNovoPercentualReduzido('');
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
+                          >
+                            Adicionar
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Percentuais de Lance */}
+                      <div className="pt-4 border-t border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Percentuais de Lance (%)
+                        </label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {percentuaisLances.map((p) => (
+                            <span
+                              key={p}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-primary-100 text-primary-800 rounded-full text-sm"
+                            >
+                              {p}%
+                              <button
+                                onClick={() => setPercentuaisLances(percentuaisLances.filter(x => x !== p))}
+                                className="hover:text-red-600"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={novoPercentualLance}
+                            onChange={(e) => setNovoPercentualLance(e.target.value)}
+                            placeholder="Ex: 35"
+                            className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                          />
+                          <button
+                            onClick={() => {
+                              const valor = parseInt(novoPercentualLance);
+                              if (valor > 0 && valor <= 100 && !percentuaisLances.includes(valor)) {
+                                setPercentuaisLances([...percentuaisLances, valor]);
+                                setNovoPercentualLance('');
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700"
+                          >
+                            Adicionar
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -699,25 +800,17 @@ const Simulador = () => {
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-200">
-                              <div>
-                                <div className="font-semibold text-green-800">Parcela Reduzida (70%)</div>
-                                <div className="text-sm text-green-600">Economia de 30% até contemplação</div>
+                            {resultado.simulacao?.parcelas_reduzidas?.map((parcela, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-200">
+                                <div>
+                                  <div className="font-semibold text-green-800">Parcela Reduzida ({parcela.percentual}%)</div>
+                                  <div className="text-sm text-green-600">Economia de {parcela.economia}% até contemplação</div>
+                                </div>
+                                <div className="text-2xl font-bold text-green-700">
+                                  {formatarMoeda(parcela.valor)}
+                                </div>
                               </div>
-                              <div className="text-2xl font-bold text-green-700">
-                                {formatarMoeda(resultado.simulacao?.parcela_reduzida_70)}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-                              <div>
-                                <div className="font-semibold text-emerald-800">Parcela Reduzida (50%)</div>
-                                <div className="text-sm text-emerald-600">Economia de 50% até contemplação</div>
-                              </div>
-                              <div className="text-2xl font-bold text-emerald-700">
-                                {formatarMoeda(resultado.simulacao?.parcela_reduzida_50)}
-                              </div>
-                            </div>
+                            ))}
                           </div>
 
                           <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
@@ -877,14 +970,14 @@ const Simulador = () => {
                     <button
                       onClick={() => {
                         const sim = resultado.simulacao;
+                        const parcelasTexto = sim?.parcelas_reduzidas?.map(p => `• ${p.percentual}%: ${formatarMoeda(p.valor)}`).join('\n') || '';
                         const texto = `*SIMULAÇÃO DE CONSÓRCIO*\n\n` +
                           `📊 *${sim?.categoria?.toUpperCase()}*\n` +
                           `💰 Crédito: ${formatarMoeda(sim?.valor_credito)}\n` +
                           `📅 Prazo: ${sim?.prazo_meses} meses\n` +
                           `💵 Parcela: *${formatarMoeda(sim?.parcela_mensal)}*\n\n` +
                           `📉 *Opções de Parcela Reduzida:*\n` +
-                          `• 70%: ${formatarMoeda(sim?.parcela_reduzida_70)}\n` +
-                          `• 50%: ${formatarMoeda(sim?.parcela_reduzida_50)}\n\n` +
+                          `${parcelasTexto}\n\n` +
                           `✅ Economia vs Financiamento: ${formatarMoeda(sim?.comparativo_financiamento?.economia)}\n\n` +
                           `_Simulação feita pelo Cflow CRM_`;
                         const url = `https://wa.me/?text=${encodeURIComponent(texto)}`;
