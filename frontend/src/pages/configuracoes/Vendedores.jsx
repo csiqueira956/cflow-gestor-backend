@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import Navbar from '../../components/Navbar';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import ConfirmDialog from '../../components/ConfirmDialog';
-import { usuariosAPI, authAPI, equipesAPI } from '../../api/api';
+import { usuariosAPI, equipesAPI } from '../../api/api';
 import { useAuth } from '../../context/AuthContext';
 
 const Admin = () => {
@@ -113,7 +113,7 @@ const Admin = () => {
         toast.success(`${formData.role === 'gerente' ? 'Gerente' : 'Vendedor'} atualizado com sucesso!`);
       } else {
         // Criar novo usuário
-        await authAPI.register(dadosUsuario);
+        await usuariosAPI.criar(dadosUsuario);
         toast.success(`${formData.role === 'gerente' ? 'Gerente' : 'Vendedor'} cadastrado com sucesso!`);
       }
 

@@ -1594,7 +1594,7 @@ app.delete('/api/comissoes/:id', async (req, res) => {
 // ROTAS DE USUÁRIOS (MOCK)
 // ============================================
 
-// Listar todos os usuários
+// Listar todos os usuários (vendedores e gerentes)
 app.get('/api/usuarios', async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -1604,15 +1604,90 @@ app.get('/api/usuarios', async (req, res) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
 
-    // Buscar usuários da mesma empresa
-    const result = await pool.query(
-      'SELECT id, nome, email, role, created_at FROM usuarios WHERE company_id = $1 ORDER BY created_at DESC',
-      [decoded.company_id]
-    );
+    // Buscar usuários (vendedores e gerentes) da mesma empresa
+    const result = await pool.query(`
+      SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao,
+             u.celular, u.equipe_id, e.nome as equipe_nome, u.created_at
+      FROM usuarios u
+      LEFT JOIN equipes e ON u.equipe_id = e.id
+      WHERE u.company_id = $1 AND u.role IN ('vendedor', 'gerente')
+      ORDER BY u.role DESC, u.nome
+    `, [decoded.company_id]);
 
-    res.json(result.rows);
+    res.json({ data: { usuarios: result.rows } });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao listar usuários' });
+  }
+});
+
+// Criar usuário (apenas admin)
+app.post('/api/usuarios', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    // Verificar se é admin
+    if (decoded.role !== 'admin' && decoded.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem criar usuários.' });
+    }
+
+    const companyId = decoded.company_id;
+    if (!companyId && decoded.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const { nome, email, senha, role, tipo_usuario, percentual_comissao, celular, equipe, equipe_id } = req.body;
+
+    // Validações
+    if (!nome || !email || !senha) {
+      return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+    }
+
+    if (senha.length < 6) {
+      return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres' });
+    }
+
+    // Verificar se o email já existe
+    const emailCheck = await pool.query('SELECT id FROM usuarios WHERE email = $1', [email]);
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'Este email já está cadastrado' });
+    }
+
+    // Hash da senha
+    const senhaHash = await bcrypt.hash(senha, 10);
+
+    // Gerar link público único se for vendedor
+    const linkPublico = (role || 'vendedor') === 'vendedor' ? require('crypto').randomBytes(16).toString('hex') : null;
+
+    // Criar novo usuário
+    const result = await pool.query(`
+      INSERT INTO usuarios (nome, email, senha_hash, role, tipo_usuario, percentual_comissao, celular, equipe_id, link_publico, company_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, link_publico, company_id, created_at
+    `, [
+      nome,
+      email,
+      senhaHash,
+      role || 'vendedor',
+      tipo_usuario,
+      percentual_comissao,
+      celular,
+      equipe_id ? parseInt(equipe_id, 10) : (equipe ? parseInt(equipe, 10) : null),
+      linkPublico,
+      companyId
+    ]);
+
+    res.status(201).json({
+      message: 'Usuário criado com sucesso',
+      usuario: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Erro ao criar usuário:', error);
+    res.status(500).json({ error: 'Erro ao criar usuário' });
   }
 });
 
