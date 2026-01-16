@@ -432,153 +432,348 @@ const SimuladorV2 = () => {
     try {
       const r = resultado;
 
+      // Obter dados do usuário logado
+      const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+      const nomeVendedor = usuario.nome || 'Consultor';
+      const cargoVendedor = usuario.role === 'admin' ? 'Administrador' : usuario.role === 'gerente' ? 'Gerente' : 'Consultor de Vendas';
+
       const conteudoHTML = `
         <!DOCTYPE html>
         <html>
         <head>
           <meta charset="UTF-8">
-          <title>Simulação de Consórcio V2</title>
+          <title>Simulador de Crédito - ${r.categoria}</title>
           <style>
+            @page { size: A4; margin: 20mm; }
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 25px; color: #333; background: #fff; font-size: 11px; }
-            .header { text-align: center; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 2px solid #059669; }
-            .header h1 { color: #059669; font-size: 20px; margin-bottom: 3px; }
-            .header p { color: #666; font-size: 11px; }
-            .section { margin-bottom: 12px; background: #f8f9fa; padding: 12px; border-radius: 6px; }
-            .section-title { font-size: 12px; font-weight: bold; color: #059669; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #ddd; }
-            .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #eee; }
-            .row:last-child { border-bottom: none; }
-            .row .label { color: #666; }
-            .row .value { font-weight: bold; color: #333; }
-            .highlight { background: linear-gradient(135deg, #059669, #10B981); color: white; padding: 15px; border-radius: 8px; margin-bottom: 12px; }
-            .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-            .text-green { color: #10B981; }
-            .text-red { color: #EF4444; }
-            .text-blue { color: #3B82F6; }
-            .text-amber { color: #F59E0B; }
-            .text-purple { color: #7C3AED; }
-            .big-number { font-size: 24px; font-weight: bold; }
-            .footer { margin-top: 15px; text-align: center; color: #999; font-size: 9px; padding-top: 12px; border-top: 1px solid #eee; }
-            .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; }
-            .badge-green { background: #D1FAE5; color: #065F46; }
-            .badge-amber { background: #FEF3C7; color: #92400E; }
+            body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              padding: 30px;
+              color: #333;
+              background: #fff;
+              font-size: 13px;
+              line-height: 1.4;
+            }
+
+            /* Header */
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              margin-bottom: 20px;
+            }
+            .header-left h1 {
+              font-size: 28px;
+              font-weight: bold;
+              color: #1a1a1a;
+              margin-bottom: 5px;
+            }
+            .header-left h2 {
+              font-size: 22px;
+              font-weight: normal;
+              color: #2563eb;
+              margin-bottom: 8px;
+            }
+            .header-left .campaign {
+              font-size: 14px;
+              color: #dc2626;
+              font-weight: 600;
+            }
+            .header-left .campaign-detail {
+              font-size: 12px;
+              color: #666;
+            }
+            .header-right {
+              text-align: right;
+            }
+            .logo-placeholder {
+              width: 120px;
+              height: 60px;
+              background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+              border-radius: 8px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+              font-weight: bold;
+              font-size: 16px;
+            }
+
+            /* Main Content */
+            .content {
+              display: flex;
+              gap: 20px;
+              margin-top: 20px;
+            }
+
+            /* Left Column */
+            .left-column {
+              flex: 1;
+            }
+
+            /* Right Column (Blue) */
+            .right-column {
+              width: 280px;
+              background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+              border-radius: 8px;
+              padding: 20px;
+              color: white;
+            }
+
+            /* Field Box */
+            .field-group {
+              margin-bottom: 15px;
+            }
+            .field-label {
+              font-size: 12px;
+              font-weight: 600;
+              color: #374151;
+              margin-bottom: 4px;
+            }
+            .field-sublabel {
+              font-size: 10px;
+              color: #6b7280;
+              margin-bottom: 4px;
+            }
+            .field-box {
+              border: 1px solid #d1d5db;
+              border-radius: 4px;
+              padding: 8px 12px;
+              background: #f9fafb;
+              font-size: 14px;
+              font-weight: 500;
+            }
+            .field-row {
+              display: flex;
+              gap: 15px;
+            }
+            .field-row .field-group {
+              flex: 1;
+            }
+
+            /* Lance Section */
+            .lance-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 10px;
+            }
+            .lance-item {
+              display: flex;
+              gap: 8px;
+            }
+            .lance-item .field-box {
+              min-width: 60px;
+              text-align: center;
+            }
+
+            /* Right Column Items */
+            .right-item {
+              margin-bottom: 18px;
+              padding-bottom: 15px;
+              border-bottom: 1px solid rgba(255,255,255,0.2);
+            }
+            .right-item:last-child {
+              border-bottom: none;
+              margin-bottom: 0;
+              padding-bottom: 0;
+            }
+            .right-label {
+              font-size: 11px;
+              opacity: 0.85;
+              margin-bottom: 2px;
+            }
+            .right-sublabel {
+              font-size: 13px;
+              font-weight: 600;
+              margin-bottom: 5px;
+            }
+            .right-value {
+              font-size: 20px;
+              font-weight: bold;
+            }
+            .right-value-large {
+              font-size: 26px;
+              font-weight: bold;
+            }
+
+            /* Footer */
+            .footer {
+              margin-top: 40px;
+              padding-top: 20px;
+              border-top: 1px solid #e5e7eb;
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+            }
+            .footer-left {
+              font-size: 13px;
+            }
+            .footer-left .name {
+              font-weight: bold;
+              color: #1a1a1a;
+            }
+            .footer-left .role {
+              color: #6b7280;
+              font-size: 12px;
+            }
+            .footer-right {
+              text-align: right;
+              font-size: 11px;
+              color: #9ca3af;
+            }
           </style>
         </head>
         <body>
+          <!-- Header -->
           <div class="header">
-            <h1>${r.categoriaIcon} SIMULAÇÃO V2 - ${r.categoria.toUpperCase()}</h1>
-            <p>Pessoa ${r.tipo === 'PF' ? 'Física' : 'Jurídica'} | ${r.prazo} meses | Modelo com Piso 50%</p>
-          </div>
-
-          <div class="highlight">
-            <div style="text-align: center;">
-              <div style="font-size: 10px; opacity: 0.9;">Crédito Contratado</div>
-              <div class="big-number">${formatarMoeda(r.credito)}</div>
-              <div style="font-size: 10px; opacity: 0.9; margin-top: 5px;">Valor da Categoria: ${formatarMoeda(r.valorCategoria)}</div>
-            </div>
-          </div>
-
-          <div class="grid-2">
-            <div class="section">
-              <div class="section-title">PARCELAS</div>
-              <div class="row"><span class="label">Parcela Integral ${r.tipo}</span><span class="value">${formatarMoeda(r.tipo === 'PF' ? r.parcelaIntegralPF : r.parcelaIntegralPJ)}</span></div>
-              ${r.tipo === 'PF' ? `<div class="row"><span class="label">Seguro Vida</span><span class="value">${formatarMoeda(r.seguroMensal)}</span></div>` : ''}
+            <div class="header-left">
+              <h1>Simulador de Crédito</h1>
+              <h2>${r.usaRedutor ? 'Parcela Reduzida' : 'Parcela Integral'} ${r.categoria}</h2>
               ${r.usaRedutor ? `
-                <div class="row"><span class="label">Parcela Reduzida ${r.usaCampanha ? '(Campanha)' : `(${(r.redutorGrupo * 100).toFixed(0)}%)`}</span><span class="value text-green">${formatarMoeda(r.parcelaFinal)}</span></div>
-                <div class="row"><span class="label">Economia/mês</span><span class="value text-green">${formatarMoeda(r.economia)}</span></div>
+                <div class="campaign">${r.usaCampanha ? 'Campanha Parcela Original' : `Redução de ${(r.redutorGrupo * 100).toFixed(0)}%`}</div>
+                <div class="campaign-detail">(${r.usaCampanha ? 'Categoria/200' : `Redução de ${(r.redutorGrupo * 100).toFixed(0)}% até a Contemplação`})</div>
               ` : ''}
             </div>
+            <div class="header-right">
+              <div class="logo-placeholder">CFLOW</div>
+            </div>
+          </div>
 
-            <div class="section">
-              <div class="section-title">ADESÃO</div>
-              <div class="row"><span class="label">Tipo</span><span class="value">${r.tipoAdesao === 'SEM_ADESAO' ? 'Sem Adesão' : r.tipoAdesao === 'A_VISTA' ? 'À Vista' : `Diluída ${r.qtdParcelasAdesao}x`}</span></div>
-              ${r.valorAdesao > 0 ? `
-                <div class="row"><span class="label">Valor Adesão</span><span class="value">${formatarMoeda(r.valorAdesao)}</span></div>
-                ${r.adesaoAvista > 0 ? `<div class="row"><span class="label">Entrada</span><span class="value text-amber">${formatarMoeda(r.adesaoAvista)}</span></div>` : ''}
+          <!-- Main Content -->
+          <div class="content">
+            <!-- Left Column -->
+            <div class="left-column">
+              <!-- Taxas -->
+              <div class="field-row">
+                <div class="field-group">
+                  <div class="field-label">Taxa de adm. do Grupo</div>
+                  <div class="field-box">${formatarPercentual(r.taxas.taxaAdm)}</div>
+                </div>
+                <div class="field-group">
+                  <div class="field-label">Fundo Reserva</div>
+                  <div class="field-box">${formatarPercentual(r.taxas.fundoReserva)}</div>
+                </div>
+              </div>
+
+              ${r.tipo === 'PF' ? `
+              <div class="field-group">
+                <div class="field-sublabel">(Somente PF)</div>
+                <div class="field-label">Seguro Prestamista</div>
+                <div class="field-box">${formatarPercentual(r.taxas.taxaSeguro, 3)}</div>
+              </div>
               ` : ''}
-              <div class="row"><span class="label">Parcela Inicial</span><span class="value">${formatarMoeda(r.parcelaInicial)}</span></div>
-              <div class="row"><span class="label">Demais Parcelas</span><span class="value">${formatarMoeda(r.demaisParcelas)}</span></div>
-            </div>
-          </div>
 
-          ${r.totalLance > 0 ? `
-          <div class="section">
-            <div class="section-title">LANCE</div>
-            <div class="grid-2">
-              <div>
-                ${r.recursoProprio > 0 ? `<div class="row"><span class="label">Recurso Próprio</span><span class="value">${formatarMoeda(r.recursoProprio)}</span></div>` : ''}
-                ${r.fgts > 0 ? `<div class="row"><span class="label">FGTS</span><span class="value">${formatarMoeda(r.fgts)}</span></div>` : ''}
-                ${r.lanceEmbutido > 0 ? `
-                  <div class="row"><span class="label">Lance Embutido</span><span class="value text-purple">${formatarMoeda(r.lanceEmbutido)}</span></div>
-                ` : ''}
-                <div class="row"><span class="label"><strong>LANCE TOTAL</strong></span><span class="value text-blue"><strong>${formatarMoeda(r.totalLance)}</strong></span></div>
-              </div>
-              <div>
-                <div class="row"><span class="label">Representatividade</span><span class="value">${formatarPercentual(r.representatividade)}</span></div>
-                <div class="row"><span class="label">Lance Fixo do Grupo</span><span class="value">${formatarMoeda(r.lanceFixo)}</span></div>
-                <div class="row"><span class="label">Crédito Liberado</span><span class="value">${formatarMoeda(r.creditoLiberado)}</span></div>
-              </div>
-            </div>
-          </div>
-          ` : ''}
-
-          ${r.posContemplacao ? `
-          <div class="section" style="background: linear-gradient(135deg, #10B981, #059669); color: white;">
-            <div class="section-title" style="color: white; border-color: rgba(255,255,255,0.3);">PÓS-CONTEMPLAÇÃO (Mês ${r.posContemplacao.mesContemplacao}) ${r.posContemplacao.aplicouPiso ? '<span class="badge badge-amber">PISO 50% APLICADO</span>' : ''}</div>
-            <div class="grid-2" style="text-align: center;">
-              <div>
-                <div style="opacity: 0.9; font-size: 10px;">Crédito Liberado</div>
-                <div style="font-size: 16px; font-weight: bold;">${formatarMoeda(r.posContemplacao.creditoLiberado)}</div>
-              </div>
-              <div>
-                <div style="opacity: 0.9; font-size: 10px;">Saldo Devedor</div>
-                <div style="font-size: 16px; font-weight: bold;">${formatarMoeda(r.posContemplacao.saldoDevedor)}</div>
-              </div>
-            </div>
-            <div style="margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 6px;">
-              <div class="grid-2" style="font-size: 10px;">
-                <div>
-                  <div>Parcela Teórica: ${formatarMoeda(r.posContemplacao.parcelaTeorica)}</div>
-                  <div>Piso Mínimo (50%): ${formatarMoeda(r.posContemplacao.pisoMinimo)}</div>
+              <!-- Valor e Prazo -->
+              <div class="field-row">
+                <div class="field-group">
+                  <div class="field-label">Valor do crédito</div>
+                  <div class="field-box">${formatarMoeda(r.credito)}</div>
                 </div>
-                <div>
-                  <div>Parcela Real PJ: ${formatarMoeda(r.posContemplacao.parcelaRealPJ)}</div>
-                  ${r.tipo === 'PF' ? `<div>Novo Seguro: ${formatarMoeda(r.posContemplacao.novoSeguro)}</div>` : ''}
+                <div class="field-group">
+                  <div class="field-label">Prazo do Grupo</div>
+                  <div class="field-box">${r.prazo} Meses</div>
                 </div>
               </div>
+
+              <!-- Lance -->
+              <div class="lance-grid">
+                <div class="field-group">
+                  <div class="field-label">% Lance embutido</div>
+                  <div class="lance-item">
+                    <div class="field-box">${r.lanceEmbutido > 0 ? ((r.lanceEmbutido / r.credito) * 100).toFixed(1) : '0'}</div>
+                    <span style="align-self: center;">%</span>
+                  </div>
+                </div>
+                <div class="field-group">
+                  <div class="field-label">Valor Embutido</div>
+                  <div class="lance-item">
+                    <span style="align-self: center;">R$</span>
+                    <div class="field-box">${r.lanceEmbutido > 0 ? r.lanceEmbutido.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '0,00'}</div>
+                  </div>
+                </div>
+
+                <div class="field-group">
+                  <div class="field-label">% Lance a pagar</div>
+                  <div class="lance-item">
+                    <div class="field-box">${r.totalLance > 0 ? ((r.representatividade) * 100).toFixed(1) : '0'}</div>
+                    <span style="align-self: center;">%</span>
+                  </div>
+                </div>
+                <div class="field-group">
+                  <div class="field-label">Valor Lance</div>
+                  <div class="lance-item">
+                    <span style="align-self: center;">R$</span>
+                    <div class="field-box">${(r.recursoProprio + r.fgts).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                  </div>
+                </div>
+
+                <div class="field-group">
+                  <div class="field-label">% Lance Total</div>
+                  <div class="lance-item">
+                    <div class="field-box">${r.totalLance > 0 ? (r.representatividade * 100).toFixed(1) : '0'}</div>
+                    <span style="align-self: center;">%</span>
+                  </div>
+                </div>
+                <div class="field-group">
+                  <div class="field-label">Valor Total</div>
+                  <div class="lance-item">
+                    <span style="align-self: center;">R$</span>
+                    <div class="field-box">${r.totalLance.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div style="text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.3);">
-              <div style="opacity: 0.9; font-size: 10px;">NOVA PARCELA</div>
-              <div style="font-size: 28px; font-weight: bold;">${formatarMoeda(r.posContemplacao.novaParcela)}</div>
-              <div style="opacity: 0.9; font-size: 10px;">Prazo restante: ${r.posContemplacao.prazoRestante} meses ${r.posContemplacao.quitaAntes ? `(quita em ${r.posContemplacao.prazoParaQuitar})` : ''}</div>
-            </div>
-            <div style="margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.15); border-radius: 6px; text-align: center;">
-              <div style="font-size: 10px; opacity: 0.9;">ALTERNATIVA (parcela integral ${r.tipo})</div>
-              ${r.posContemplacao.alternativa.viavel
-                ? `<div style="font-size: 14px; font-weight: bold;">${formatarMoeda(r.posContemplacao.alternativa.parcela)}/mês quita em ${r.posContemplacao.alternativa.prazo} meses</div>`
-                : `<div style="font-size: 12px; color: #FEF3C7;">⚠️ Não viável - ultrapassaria o prazo do contrato (${r.posContemplacao.alternativa.prazo} > ${r.posContemplacao.prazoRestante})</div>`
-              }
+
+            <!-- Right Column (Blue) -->
+            <div class="right-column">
+              ${r.tipoAdesao !== 'SEM_ADESAO' && r.valorAdesao > 0 ? `
+              <div class="right-item">
+                <div class="right-label">(${formatarPercentual(r.taxas.taxaAntecipada)} de Antecipada + parcela do mês)</div>
+                <div class="right-sublabel">Primeiras ${r.qtdParcelasAdesao === '0' ? '1' : r.qtdParcelasAdesao} parcelas</div>
+                <div class="right-value">${formatarMoeda(r.parcelaInicial)}</div>
+              </div>
+              ` : ''}
+
+              <div class="right-item">
+                <div class="right-label">(Antes da contemplação)</div>
+                <div class="right-sublabel">${r.usaRedutor ? 'Parcelas Reduzidas' : 'Demais Parcelas'}</div>
+                <div class="right-value">${formatarMoeda(r.parcelaFinal)}</div>
+              </div>
+
+              <div class="right-item">
+                <div class="right-sublabel">Crédito Líquido</div>
+                <div class="right-value-large">${formatarMoeda(r.creditoLiberado)}</div>
+              </div>
+
+              ${r.posContemplacao ? `
+              <div class="right-item">
+                <div class="right-label">(pós-contemplado mês ${r.posContemplacao.mesContemplacao})</div>
+                <div class="right-sublabel">Valor Parcela</div>
+                <div class="right-value">${formatarMoeda(r.posContemplacao.novaParcela)}</div>
+              </div>
+
+              <div class="right-item">
+                <div class="right-sublabel">Prazo Restante</div>
+                <div class="right-value">${r.posContemplacao.prazoRestante} meses</div>
+              </div>
+              ` : `
+              <div class="right-item">
+                <div class="right-sublabel">Parcela Integral ${r.tipo}</div>
+                <div class="right-value">${formatarMoeda(r.tipo === 'PF' ? r.parcelaIntegralPF : r.parcelaIntegralPJ)}</div>
+              </div>
+              `}
             </div>
           </div>
-          ` : ''}
 
-          <div class="section">
-            <div class="section-title">DEMONSTRATIVO DE TAXAS</div>
-            <div class="grid-2">
-              <div>
-                <div class="row"><span class="label">Taxa Administrativa</span><span class="value">${formatarMoeda(r.taxaAdminTotal)} (${formatarPercentual(r.taxas.taxaAdm)})</span></div>
-                <div class="row"><span class="label">Fundo de Reserva</span><span class="value">${formatarMoeda(r.fundoReservaTotal)} (${formatarPercentual(r.taxas.fundoReserva)})</span></div>
-              </div>
-              <div>
-                <div class="row"><span class="label">Taxa Mensal</span><span class="value">${formatarPercentual(r.taxaMensal, 3)}</span></div>
-                <div class="row"><span class="label">Taxa Anual</span><span class="value">${formatarPercentual(r.taxaAnual, 2)}</span></div>
-              </div>
-            </div>
-          </div>
-
+          <!-- Footer -->
           <div class="footer">
-            <p>Simulação V2 (com piso 50%) gerada em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
-            <p style="margin-top: 3px;">Cflow CRM - www.cflowcrm.com.br</p>
+            <div class="footer-left">
+              <div class="name">${nomeVendedor}</div>
+              <div class="role">${cargoVendedor}</div>
+            </div>
+            <div class="footer-right">
+              Simulação gerada em ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}
+            </div>
           </div>
         </body>
         </html>
