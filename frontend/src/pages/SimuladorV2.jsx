@@ -803,13 +803,7 @@ const SimuladorV2 = () => {
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="mb-8">
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-gray-900">Simulador V2</h1>
-              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-sm font-medium rounded-full">
-                Modelo Documento
-              </span>
-            </div>
-            <p className="text-gray-600 mt-2">Versão com Piso 50%, Adesão e Campanha Parcela Original</p>
+            <h1 className="text-3xl font-bold text-gray-900">Simulador de Consórcio</h1>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1162,7 +1156,7 @@ const SimuladorV2 = () => {
                 onClick={calcular}
                 className="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
               >
-                Calcular Simulação V2
+                Calcular
               </button>
             </div>
 
