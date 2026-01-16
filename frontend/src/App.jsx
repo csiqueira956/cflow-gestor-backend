@@ -24,6 +24,7 @@ import Administradoras from './pages/configuracoes/Administradoras';
 import Metas from './pages/configuracoes/Metas';
 import SuperAdminPanel from './pages/SuperAdminPanel';
 import Simulador from './pages/Simulador';
+import SimuladorV2 from './pages/SimuladorV2';
 
 // Componente para rotas protegidas
 const ProtectedRoute = ({ children }) => {
@@ -245,6 +246,15 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Simulador />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/simulador-v2"
+          element={
+            <ProtectedRoute>
+              <SimuladorV2 />
             </ProtectedRoute>
           }
         />
