@@ -1572,3 +1572,4 @@ const Simulador = () => {
 };
 
 export default Simulador;
+// Build trigger 1768571033
