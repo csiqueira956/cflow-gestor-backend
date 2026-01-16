@@ -496,26 +496,28 @@ const Simulador = () => {
               <tr>
                 <th>Lance %</th>
                 <th>Valor Total</th>
-                <th style="color: #7C3AED;">Embutido</th>
+                <th style="color: #7C3AED;">Embutido (-créd)</th>
                 <th style="color: #3B82F6;">A Pagar</th>
                 <th style="color: #F59E0B;">Créd. Líquido</th>
+                <th>Saldo Devedor</th>
                 <th style="color: #10B981;">Parcela Pós</th>
               </tr>
               ${sim?.lances?.map(l => `
                 <tr>
                   <td><strong>${l.percentual}%</strong><br/><small style="color:#999;">(${l.percentual_do_credito?.toFixed(1)}% créd)</small></td>
                   <td><strong>${formatarMoeda(l.valor)}</strong></td>
-                  <td class="text-purple">${formatarMoeda(l.lance_embutido_usado)}</td>
+                  <td class="text-purple">${formatarMoeda(l.lance_embutido_usado)}<br/><small style="color:#EF4444;">-${((l.lance_embutido_usado / sim?.valor_credito) * 100).toFixed(0)}% créd</small></td>
                   <td class="text-blue">${formatarMoeda(l.lance_a_pagar)}</td>
-                  <td class="text-amber">${formatarMoeda(l.credito_liquido)}</td>
+                  <td class="text-amber"><strong>${formatarMoeda(l.credito_liquido)}</strong><br/><small style="color:#999;">${((l.credito_liquido / sim?.valor_credito) * 100).toFixed(0)}% créd</small></td>
+                  <td>${formatarMoeda(l.saldo_devedor)}</td>
                   <td class="text-green"><strong>${formatarMoeda(l.parcelaPosLance)}</strong><br/><small style="color:#999;">${l.meses_restantes}m</small></td>
                 </tr>
               `).join('')}
             </table>
-            <div style="font-size: 8px; color: #666; margin-top: 6px; display: flex; gap: 15px;">
-              <span><strong class="text-purple">Embutido:</strong> vem do crédito (reduz créd. líquido)</span>
-              <span><strong class="text-blue">A Pagar:</strong> recurso próprio</span>
-              <span><strong class="text-amber">Créd. Líquido:</strong> crédito - embutido</span>
+            <div style="font-size: 8px; color: #666; margin-top: 6px;">
+              <div style="margin-bottom: 3px;"><strong class="text-purple">Lance Embutido:</strong> Vem do próprio crédito - <strong style="color:#EF4444;">ABATE do crédito líquido</strong> disponível para comprar o bem</div>
+              <div style="margin-bottom: 3px;"><strong class="text-blue">Lance a Pagar:</strong> Recurso próprio (dinheiro do bolso) - NÃO afeta o crédito</div>
+              <div><strong class="text-amber">Crédito Líquido:</strong> Valor que sobra para comprar o bem = Crédito Original - Lance Embutido</div>
             </div>
           </div>
 
@@ -1229,8 +1231,8 @@ const Simulador = () => {
                                   <th className="px-2 py-3 text-left text-xs font-semibold text-purple-700 uppercase">Embutido</th>
                                   <th className="px-2 py-3 text-left text-xs font-semibold text-blue-700 uppercase">A Pagar</th>
                                   <th className="px-2 py-3 text-left text-xs font-semibold text-amber-700 uppercase">Créd. Líquido</th>
+                                  <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Saldo Devedor</th>
                                   <th className="px-2 py-3 text-left text-xs font-semibold text-green-700 uppercase">Parcela Pós</th>
-                                  <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -1257,34 +1259,31 @@ const Simulador = () => {
                                         {lance.lance_embutido_usado >= resultado.simulacao?.lance_embutido_max && (
                                           <span className="text-[10px] text-orange-500">(máx 30%)</span>
                                         )}
+                                        <span className="text-[10px] text-red-500">(-{formatarMoeda(lance.lance_embutido_usado)} do créd.)</span>
                                       </div>
                                     </td>
                                     <td className="px-2 py-3 font-semibold text-blue-600">
                                       {formatarMoeda(lance.lance_a_pagar)}
+                                      {lance.lance_a_pagar > 0 && !lance.lance_viavel && (
+                                        <div className="text-[10px] text-red-500">Falta: {formatarMoeda(lance.falta_para_lance)}</div>
+                                      )}
                                     </td>
-                                    <td className="px-2 py-3 font-semibold text-amber-600">
-                                      {formatarMoeda(lance.credito_liquido)}
+                                    <td className="px-2 py-3">
+                                      <div className="flex flex-col">
+                                        <span className="font-bold text-amber-600">{formatarMoeda(lance.credito_liquido)}</span>
+                                        <span className="text-[10px] text-gray-500">
+                                          ({((lance.credito_liquido / resultado.simulacao?.valor_credito) * 100).toFixed(0)}% do créd.)
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td className="px-2 py-3 text-gray-700">
+                                      {formatarMoeda(lance.saldo_devedor)}
                                     </td>
                                     <td className="px-2 py-3">
                                       <div className="flex flex-col">
                                         <span className="font-bold text-green-600">{formatarMoeda(lance.parcelaPosLance)}</span>
                                         <span className="text-[10px] text-gray-400">{lance.meses_restantes} meses</span>
                                       </div>
-                                    </td>
-                                    <td className="px-2 py-3">
-                                      {lance.lance_viavel ? (
-                                        <span className="inline-flex items-center gap-1 text-green-600 text-xs">
-                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                          </svg>
-                                          OK
-                                        </span>
-                                      ) : (
-                                        <span className="inline-flex flex-col text-red-600 text-xs">
-                                          <span className="font-semibold">Falta:</span>
-                                          <span>{formatarMoeda(lance.falta_para_lance)}</span>
-                                        </span>
-                                      )}
                                     </td>
                                   </tr>
                                 ))}
@@ -1294,29 +1293,31 @@ const Simulador = () => {
 
                           <div className="grid grid-cols-2 gap-4 text-xs">
                             <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
-                              <div className="font-semibold text-purple-800 mb-1">Lance Embutido</div>
+                              <div className="font-semibold text-purple-800 mb-1">Lance Embutido (ABATE do Crédito)</div>
                               <p className="text-purple-600">
-                                Até 30% do crédito. Vem do próprio crédito - reduz o "Crédito Líquido" para comprar o bem.
+                                Até 30% do crédito. <strong className="text-red-600">É DESCONTADO do crédito</strong> - você recebe menos dinheiro para comprar o bem.
                               </p>
                             </div>
                             <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                              <div className="font-semibold text-blue-800 mb-1">Lance a Pagar</div>
+                              <div className="font-semibold text-blue-800 mb-1">Lance a Pagar (Recurso Próprio)</div>
                               <p className="text-blue-600">
-                                Valor que você paga do próprio bolso (recurso próprio). Não afeta o crédito.
+                                Valor que você paga do próprio bolso. <strong className="text-green-600">NÃO afeta o crédito</strong> - você recebe o crédito integral.
                               </p>
                             </div>
                           </div>
 
-                          <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+                          <div className="bg-red-50 rounded-xl p-4 border border-red-200">
                             <div className="flex items-start gap-2">
-                              <svg className="w-5 h-5 text-amber-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                              <svg className="w-5 h-5 text-red-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                               </svg>
                               <div>
-                                <div className="font-medium text-amber-800">Crédito Líquido</div>
-                                <div className="text-sm text-amber-700">
-                                  É o valor que sobra para comprar o bem após usar o lance embutido.
-                                  Ex: Crédito R$ 480.000 - Lance Embutido R$ 144.000 (30%) = <strong>Crédito Líquido R$ 336.000</strong>
+                                <div className="font-medium text-red-800">ATENÇÃO: Lance Embutido reduz seu Crédito!</div>
+                                <div className="text-sm text-red-700">
+                                  Ao usar lance embutido, o valor é <strong>ABATIDO do seu crédito</strong>. O "Crédito Líquido" é o valor que sobra para comprar o bem.
+                                </div>
+                                <div className="text-sm text-red-700 mt-2 bg-red-100 p-2 rounded">
+                                  <strong>Exemplo:</strong> Crédito R$ 480.000 - Lance Embutido R$ 144.000 (30%) = <strong>Crédito Líquido R$ 336.000</strong>
                                 </div>
                               </div>
                             </div>
