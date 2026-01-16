@@ -300,17 +300,21 @@ const SimuladorV2 = () => {
         const novaParcela = tipoPF ? parcelaRealPF : parcelaRealPJ;
 
         // ========================================
-        // ETAPA 14: NOVO PRAZO
+        // ETAPA 14: NOVO PRAZO (fixo = prazo restante do contrato)
         // ========================================
-        const novoPrazo = Math.ceil(saldoDevedor / parcelaRealPJ);
+        // O prazo restante é fixo pelo contrato
+        // Se aplicou piso, o cliente quita antes do prazo
+        const prazoParaQuitar = Math.ceil(saldoDevedor / parcelaRealPJ);
+        const quitaAntes = prazoParaQuitar < prazoRestante;
 
         // ========================================
-        // ETAPA 15: ALTERNATIVA (mantém parcelaPJ, ajusta prazo)
+        // ETAPA 15: ALTERNATIVA (mantém parcelaPJ integral, calcula prazo)
         // ========================================
-        const prazoAlternativo = Math.ceil(saldoDevedor / parcelaPJ);
-        const parcelaAlternativa = tipoPF
-          ? (saldoDevedor / prazoAlternativo) + novoSeguro
-          : saldoDevedor / prazoAlternativo;
+        // Se pagar a parcela integral (sem redutor), em quantos meses quita?
+        const prazoComParcelaIntegral = Math.ceil(saldoDevedor / parcelaPJ);
+        // Se ultrapassar o prazo do contrato, não é viável
+        const alternativaViavel = prazoComParcelaIntegral <= prazoRestante;
+        const parcelaAlternativa = tipoPF ? parcelaPJ + novoSeguro : parcelaPJ;
 
         posContemplacao = {
           mesContemplacao,
@@ -319,17 +323,19 @@ const SimuladorV2 = () => {
           valorPago: parcelaUsada * mesContemplacao,
           saldoDevedor,
           novoSeguro,
-          prazoRestante,
+          prazoRestante,        // Prazo restante do contrato (fixo)
           parcelaTeorica,
           pisoMinimo,
           parcelaRealPJ,
           parcelaRealPF,
           novaParcela,
-          novoPrazo,
+          prazoParaQuitar,      // Quantos meses para quitar pagando novaParcela
+          quitaAntes,           // Se quita antes do fim do contrato
           aplicouPiso,
           alternativa: {
-            novoPrazo: prazoAlternativo,
-            novaParcela: parcelaAlternativa
+            prazo: prazoComParcelaIntegral,   // Quantos meses pagando parcela integral
+            parcela: parcelaAlternativa,      // Parcela integral (PJ ou PF)
+            viavel: alternativaViavel         // Se cabe no prazo do contrato
           }
         };
       }
@@ -544,11 +550,14 @@ const SimuladorV2 = () => {
             <div style="text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.3);">
               <div style="opacity: 0.9; font-size: 10px;">NOVA PARCELA</div>
               <div style="font-size: 28px; font-weight: bold;">${formatarMoeda(r.posContemplacao.novaParcela)}</div>
-              <div style="opacity: 0.9; font-size: 10px;">Novo prazo: ${r.posContemplacao.novoPrazo} meses</div>
+              <div style="opacity: 0.9; font-size: 10px;">Prazo restante: ${r.posContemplacao.prazoRestante} meses ${r.posContemplacao.quitaAntes ? `(quita em ${r.posContemplacao.prazoParaQuitar})` : ''}</div>
             </div>
             <div style="margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.15); border-radius: 6px; text-align: center;">
-              <div style="font-size: 10px; opacity: 0.9;">ALTERNATIVA (mantém parcela integral)</div>
-              <div style="font-size: 14px; font-weight: bold;">${formatarMoeda(r.posContemplacao.alternativa.novaParcela)} por ${r.posContemplacao.alternativa.novoPrazo} meses</div>
+              <div style="font-size: 10px; opacity: 0.9;">ALTERNATIVA (parcela integral ${r.tipo})</div>
+              ${r.posContemplacao.alternativa.viavel
+                ? `<div style="font-size: 14px; font-weight: bold;">${formatarMoeda(r.posContemplacao.alternativa.parcela)}/mês quita em ${r.posContemplacao.alternativa.prazo} meses</div>`
+                : `<div style="font-size: 12px; color: #FEF3C7;">⚠️ Não viável - ultrapassaria o prazo do contrato (${r.posContemplacao.alternativa.prazo} > ${r.posContemplacao.prazoRestante})</div>`
+              }
             </div>
           </div>
           ` : ''}
@@ -1138,12 +1147,23 @@ const SimuladorV2 = () => {
                       <div className="bg-white/20 rounded-xl p-4 text-center">
                         <p className="text-sm opacity-80">Nova Parcela</p>
                         <p className="text-3xl font-bold">{formatarMoeda(resultado.posContemplacao.novaParcela)}</p>
-                        <p className="text-sm opacity-80 mt-1">por {resultado.posContemplacao.novoPrazo} meses</p>
+                        <p className="text-sm opacity-80 mt-1">
+                          Prazo restante: {resultado.posContemplacao.prazoRestante} meses
+                          {resultado.posContemplacao.quitaAntes && (
+                            <span className="ml-1">(quita em {resultado.posContemplacao.prazoParaQuitar})</span>
+                          )}
+                        </p>
                       </div>
 
                       <div className="mt-4 text-sm opacity-90 bg-white/10 rounded-lg p-3">
-                        <p className="font-medium mb-1">📊 Alternativa (mantém parcela integral):</p>
-                        <p>{formatarMoeda(resultado.posContemplacao.alternativa.novaParcela)}/mês por {resultado.posContemplacao.alternativa.novoPrazo} meses</p>
+                        <p className="font-medium mb-1">📊 Alternativa (parcela integral {resultado.tipo}):</p>
+                        {resultado.posContemplacao.alternativa.viavel ? (
+                          <p>{formatarMoeda(resultado.posContemplacao.alternativa.parcela)}/mês quita em {resultado.posContemplacao.alternativa.prazo} meses</p>
+                        ) : (
+                          <p className="text-amber-300">
+                            ⚠️ Não viável - ultrapassaria o prazo do contrato ({resultado.posContemplacao.alternativa.prazo} {'>'} {resultado.posContemplacao.prazoRestante})
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
