@@ -4,6 +4,7 @@ import {
   listarGerentes,
   listarUsuarios,
   buscarUsuario,
+  criarUsuario,
   atualizarUsuario,
   deletarUsuario,
   registrarVendedor
@@ -29,6 +30,7 @@ router.use(isAdmin);
 router.get('/vendedores', listarVendedores);
 router.get('/gerentes', listarGerentes);
 router.get('/', listarUsuarios);
+router.post('/', criarUsuario);
 router.get('/:id', buscarUsuario);
 router.put('/:id', validateUserUpdate, atualizarUsuario);
 router.delete('/:id', deletarUsuario);

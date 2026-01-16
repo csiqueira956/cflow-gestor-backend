@@ -73,6 +73,7 @@ export const usuariosAPI = {
   listarGerentes: () => api.get('/usuarios/gerentes'),
   listarUsuarios: () => api.get('/usuarios'),
   buscar: (id) => api.get(`/usuarios/${id}`),
+  criar: (userData) => api.post('/usuarios', userData),
   atualizar: (id, userData) => api.put(`/usuarios/${id}`, userData),
   deletar: (id) => api.delete(`/usuarios/${id}`),
 };
