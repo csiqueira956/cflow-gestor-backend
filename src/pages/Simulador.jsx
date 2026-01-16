@@ -600,6 +600,66 @@ const Simulador = () => {
                   </select>
                 </div>
 
+                {/* Taxas do Consórcio */}
+                <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Taxas do Consórcio
+                  </h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Taxa Adm. (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={taxasPersonalizadas.taxa_administracao}
+                        onChange={(e) => setTaxasPersonalizadas({
+                          ...taxasPersonalizadas,
+                          taxa_administracao: e.target.value
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Fundo Res. (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={taxasPersonalizadas.fundo_reserva}
+                        onChange={(e) => setTaxasPersonalizadas({
+                          ...taxasPersonalizadas,
+                          fundo_reserva: e.target.value
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Seguro (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        value={taxasPersonalizadas.seguro_vida}
+                        onChange={(e) => setTaxasPersonalizadas({
+                          ...taxasPersonalizadas,
+                          seguro_vida: e.target.value
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="0.03"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Redutor do Grupo e Parcelas Reduzidas */}
                 <div className="mb-6 p-4 bg-green-50 rounded-xl border border-green-200">
                   <h3 className="text-sm font-semibold text-green-800 mb-3 flex items-center gap-2">
@@ -613,35 +673,36 @@ const Simulador = () => {
                       <label className="block text-xs font-medium text-gray-600 mb-1">
                         Redutor (%)
                       </label>
-                      <select
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="100"
                         value={redutorGrupo}
                         onChange={(e) => setRedutorGrupo(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
-                      >
-                        <option value="0">0% (Sem redutor)</option>
-                        <option value="20">20%</option>
-                        <option value="30">30%</option>
-                        <option value="40">40%</option>
-                        <option value="50">50%</option>
-                      </select>
+                        placeholder="40"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Parcelas Reduzidas
+                        Qtd. Parcelas
                       </label>
-                      <select
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        max="200"
                         value={qtdParcelasReduzidas}
                         onChange={(e) => setQtdParcelasReduzidas(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
-                      >
-                        <option value="6">6 primeiras</option>
-                        <option value="12">12 primeiras</option>
-                        <option value="18">18 primeiras</option>
-                        <option value="24">24 primeiras</option>
-                        <option value="36">36 primeiras</option>
-                      </select>
+                        placeholder="12"
+                      />
                     </div>
                   </div>
+                  <p className="text-xs text-green-600 mt-2">
+                    Desconto aplicado nas primeiras parcelas
+                  </p>
                 </div>
 
                 {/* Recurso Próprio para Lance */}
@@ -689,7 +750,7 @@ const Simulador = () => {
                 </button>
               </div>
 
-              {/* Taxas Personalizadas */}
+              {/* Percentuais de Estudo (Expandível) */}
               <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
                 <button
                   onClick={() => setShowTaxasPersonalizadas(!showTaxasPersonalizadas)}
@@ -697,9 +758,9 @@ const Simulador = () => {
                 >
                   <div className="flex items-center gap-3">
                     <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
-                    <span className="font-medium text-gray-700">Taxas Personalizadas</span>
+                    <span className="font-medium text-gray-700">Percentuais de Estudo</span>
                   </div>
                   <svg
                     className={`w-5 h-5 text-gray-400 transition-transform ${showTaxasPersonalizadas ? 'rotate-180' : ''}`}
@@ -714,64 +775,10 @@ const Simulador = () => {
                 {showTaxasPersonalizadas && (
                   <div className="px-6 pb-6 border-t border-gray-100">
                     <div className="space-y-4 pt-4">
-                      {/* Taxa Administrativa */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Taxa Administrativa (%)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={taxasPersonalizadas.taxa_administracao}
-                          onChange={(e) => setTaxasPersonalizadas({
-                            ...taxasPersonalizadas,
-                            taxa_administracao: e.target.value
-                          })}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          placeholder="18"
-                        />
-                      </div>
-
-                      {/* Fundo de Reserva */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Fundo de Reserva (%)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={taxasPersonalizadas.fundo_reserva}
-                          onChange={(e) => setTaxasPersonalizadas({
-                            ...taxasPersonalizadas,
-                            fundo_reserva: e.target.value
-                          })}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          placeholder="2"
-                        />
-                      </div>
-
-                      {/* Seguro de Vida */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Seguro de Vida (% mensal)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.001"
-                          value={taxasPersonalizadas.seguro_vida}
-                          onChange={(e) => setTaxasPersonalizadas({
-                            ...taxasPersonalizadas,
-                            seguro_vida: e.target.value
-                          })}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          placeholder="0.03"
-                        />
-                      </div>
-
                       {/* Percentuais de Parcelas Reduzidas */}
-                      <div className="pt-4 border-t border-gray-200">
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Parcelas Reduzidas (%)
+                          Opções de Parcela Reduzida (%)
                         </label>
                         <div className="flex flex-wrap gap-2 mb-2">
                           {percentuaisReduzidos.map((p) => (
@@ -811,7 +818,7 @@ const Simulador = () => {
                             }}
                             className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
                           >
-                            Adicionar
+                            +
                           </button>
                         </div>
                       </div>
@@ -859,7 +866,7 @@ const Simulador = () => {
                             }}
                             className="px-3 py-1.5 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700"
                           >
-                            Adicionar
+                            +
                           </button>
                         </div>
                       </div>
