@@ -36,6 +36,10 @@ const Simulador = () => {
   const [redutorGrupo, setRedutorGrupo] = useState('40'); // % de desconto nas primeiras parcelas
   const [qtdParcelasReduzidas, setQtdParcelasReduzidas] = useState('12'); // quantidade de parcelas com desconto
 
+  // Taxa de Antecipada (modelo Ololu) - 2% do crédito diluído nas primeiras parcelas
+  const [percentualAntecipada, setPercentualAntecipada] = useState('2'); // % do crédito como antecipada
+  const [qtdParcelasAntecipada, setQtdParcelasAntecipada] = useState('24'); // parcelas onde a antecipada é diluída
+
   // Lance - Recurso Próprio
   const [recursoProprio, setRecursoProprio] = useState(''); // valor em R$ que o cliente tem disponível
 
@@ -110,14 +114,26 @@ const Simulador = () => {
     const qtdReduzidas = parseInt(qtdParcelasReduzidas) || 12;
     const recursoProprioValor = parseCurrency(recursoProprio) || 0;
 
-    // Cálculos básicos (modelo PortoBank)
+    // === MODELO OLOLU: Taxa de Antecipada ===
+    const taxaAntecipada = parseFloat(percentualAntecipada) / 100 || 0;
+    const qtdAntecipada = parseInt(qtdParcelasAntecipada) || 24;
+    const valorAntecipada = credito * taxaAntecipada; // 2% do crédito
+    const valorAntecipadaPorParcela = qtdAntecipada > 0 ? valorAntecipada / qtdAntecipada : 0;
+
+    // Cálculos básicos (modelo PortoBank/Ololu)
     const valorTaxaAdm = credito * taxaAdm;
     const valorFundoReserva = credito * fundoReserva;
     const valorSeguroTotal = credito * seguroMensal * prazo;
     const totalPagar = credito + valorTaxaAdm + valorFundoReserva + valorSeguroTotal;
-    const parcelaMensal = totalPagar / prazo; // Parcela integral
+    const parcelaMensal = totalPagar / prazo; // Parcela integral (demais parcelas)
 
-    // Parcela com Redutor do Grupo (primeiras X parcelas)
+    // === MODELO OLOLU: Primeiras parcelas com Antecipada ===
+    // Primeiras X parcelas = parcela normal + antecipada diluída
+    const parcelaPrimeiras = parcelaMensal + valorAntecipadaPorParcela;
+    // Demais parcelas = parcela normal (sem antecipada)
+    const parcelaDemais = parcelaMensal;
+
+    // Parcela com Redutor do Grupo (primeiras X parcelas) - se configurado
     const parcelaReduzidaComRedutor = parcelaMensal * (1 - redutor);
 
     // Comparativo com financiamento (estimativa com juros de 1.5% a.m.)
@@ -133,36 +149,67 @@ const Simulador = () => {
       economia: 100 - percentual
     }));
 
-    // === LANCE FIXO vs LANCE LIVRE (modelo PortoBank) ===
+    // === LANCE (modelo Ololu) ===
+    // IMPORTANTE: Lance é calculado sobre o TOTAL A PAGAR, não sobre o crédito
 
-    // Lance Embutido máximo = 30% do crédito
+    // Lance Embutido máximo = 30% do CRÉDITO (não do total a pagar)
     const lanceEmbutidoMax = credito * 0.30;
 
     // Representatividade do recurso próprio
-    const representatividadeRecursoProprio = recursoProprioValor > 0 ? (recursoProprioValor / credito) * 100 : 0;
+    const representatividadeRecursoProprio = recursoProprioValor > 0 ? (recursoProprioValor / totalPagar) * 100 : 0;
 
-    // Lance Fixo: usa recurso próprio + lance embutido
+    // Lance Livre: usa recurso próprio + lance embutido
     const lanceLivre = {
       recurso_proprio: recursoProprioValor,
       lance_embutido: lanceEmbutidoMax,
       total: recursoProprioValor + lanceEmbutidoMax,
-      representatividade: ((recursoProprioValor + lanceEmbutidoMax) / credito) * 100
+      representatividade_credito: ((recursoProprioValor + lanceEmbutidoMax) / credito) * 100,
+      representatividade_total: ((recursoProprioValor + lanceEmbutidoMax) / totalPagar) * 100
     };
 
-    // Estudo de lance por percentuais
+    // Estudo de lance por percentuais (sobre TOTAL A PAGAR - modelo Ololu)
     const lances = percentuaisLances.sort((a, b) => a - b).map(percentual => {
-      const valorLance = credito * (percentual / 100);
-      // Lance pode ser composto de: recurso próprio + lance embutido
-      const lanceEmbutidoNecessario = Math.max(0, valorLance - recursoProprioValor);
-      const usaRecursoProprio = Math.min(recursoProprioValor, valorLance);
+      // Lance calculado sobre TOTAL A PAGAR (modelo Ololu)
+      const valorLance = totalPagar * (percentual / 100);
+      const percentualDoCredito = (valorLance / credito) * 100;
+
+      // Prioridade: 1º usa lance embutido, 2º usa recurso próprio (A PAGAR)
+      // Lance embutido limitado a 30% do crédito
+      const lanceEmbutidoUsado = Math.min(valorLance, lanceEmbutidoMax);
+      const restanteAposEmbutido = Math.max(0, valorLance - lanceEmbutidoUsado);
+
+      // O restante é "Lance a Pagar" (recurso próprio)
+      const lanceAPagar = restanteAposEmbutido;
+
+      // Verifica se lance é viável (embutido + recurso próprio cobre o lance)
+      const lanceMaximoPossivel = lanceEmbutidoMax + recursoProprioValor;
+      const lanceViavel = valorLance <= lanceMaximoPossivel;
+      const faltaParaLance = Math.max(0, valorLance - lanceMaximoPossivel);
+
+      // Crédito líquido após usar lance embutido (o que sobra para comprar o bem)
+      const creditoLiquido = credito - lanceEmbutidoUsado;
+
+      // Saldo devedor após lance (total a pagar - lance total ofertado)
+      const saldoAposLance = totalPagar - valorLance;
+
+      // Meses restantes pós-contemplação (considerando contemplação no mês 1)
+      const mesesRestantes = prazo - 1;
+
+      // Nova parcela pós-contemplação
+      const parcelaPosLance = mesesRestantes > 0 ? saldoAposLance / mesesRestantes : 0;
 
       return {
         percentual,
+        percentual_do_credito: Math.round(percentualDoCredito * 100) / 100,
         valor: Math.round(valorLance * 100) / 100,
-        recurso_proprio_usado: Math.round(usaRecursoProprio * 100) / 100,
-        lance_embutido_usado: Math.round(lanceEmbutidoNecessario * 100) / 100,
-        // Após lance embutido, parcela reduz proporcionalmente
-        parcelaPosLance: Math.round(((totalPagar - lanceEmbutidoNecessario) / prazo) * 100) / 100
+        lance_embutido_usado: Math.round(lanceEmbutidoUsado * 100) / 100,
+        lance_a_pagar: Math.round(lanceAPagar * 100) / 100,
+        credito_liquido: Math.round(creditoLiquido * 100) / 100,
+        lance_viavel: lanceViavel,
+        falta_para_lance: Math.round(faltaParaLance * 100) / 100,
+        saldo_devedor: Math.round(saldoAposLance * 100) / 100,
+        meses_restantes: mesesRestantes,
+        parcelaPosLance: Math.round(parcelaPosLance * 100) / 100
       };
     });
 
@@ -222,6 +269,14 @@ const Simulador = () => {
       total_pagar: Math.round(totalPagar * 100) / 100,
       parcela_mensal: Math.round(parcelaMensal * 100) / 100,
 
+      // === MODELO OLOLU: Antecipada ===
+      percentual_antecipada: parseFloat(percentualAntecipada) || 0,
+      valor_antecipada: Math.round(valorAntecipada * 100) / 100,
+      qtd_parcelas_antecipada: qtdAntecipada,
+      valor_antecipada_por_parcela: Math.round(valorAntecipadaPorParcela * 100) / 100,
+      parcela_primeiras: Math.round(parcelaPrimeiras * 100) / 100, // Primeiras parcelas (com antecipada)
+      parcela_demais: Math.round(parcelaDemais * 100) / 100, // Demais parcelas (sem antecipada)
+
       // Redutor do Grupo
       redutor_grupo: parseFloat(redutorGrupo) || 0,
       qtd_parcelas_reduzidas: qtdReduzidas,
@@ -229,6 +284,7 @@ const Simulador = () => {
 
       // Lance
       recurso_proprio: recursoProprioValor,
+      lance_embutido_max: Math.round(lanceEmbutidoMax * 100) / 100,
       lance_livre: lanceLivre,
 
       // Novas informações
@@ -329,30 +385,38 @@ const Simulador = () => {
           <title>Simulação de Consórcio</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 30px; color: #333; background: #fff; font-size: 12px; }
-            .header { text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 3px solid #4F46E5; }
-            .header h1 { color: #4F46E5; font-size: 22px; margin-bottom: 5px; }
-            .header p { color: #666; font-size: 12px; }
-            .section { margin-bottom: 15px; background: #f8f9fa; padding: 15px; border-radius: 8px; }
-            .section-title { font-size: 13px; font-weight: bold; color: #4F46E5; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #ddd; }
-            .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eee; }
+            body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 25px; color: #333; background: #fff; font-size: 11px; }
+            .header { text-align: center; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 2px solid #4F46E5; }
+            .header h1 { color: #4F46E5; font-size: 20px; margin-bottom: 3px; }
+            .header p { color: #666; font-size: 11px; }
+            .section { margin-bottom: 12px; background: #f8f9fa; padding: 12px; border-radius: 6px; }
+            .section-title { font-size: 12px; font-weight: bold; color: #4F46E5; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #ddd; }
+            .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #eee; }
             .row:last-child { border-bottom: none; }
             .row .label { color: #666; }
             .row .value { font-weight: bold; color: #333; }
-            .highlight { background: linear-gradient(135deg, #4F46E5, #7C3AED); color: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 15px; }
-            .highlight .parcela { font-size: 28px; font-weight: bold; }
-            .highlight .label { opacity: 0.9; font-size: 12px; }
-            .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-            .economia { background: linear-gradient(135deg, #10B981, #059669); color: white; padding: 15px; border-radius: 8px; text-align: center; }
-            .economia .valor { font-size: 20px; font-weight: bold; }
-            .footer { margin-top: 20px; text-align: center; color: #999; font-size: 10px; padding-top: 15px; border-top: 1px solid #eee; }
-            .badge { display: inline-block; background: #E0E7FF; color: #4F46E5; padding: 3px 10px; border-radius: 15px; font-size: 11px; margin-bottom: 8px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; font-size: 11px; }
+            .highlight { background: linear-gradient(135deg, #4F46E5, #7C3AED); color: white; padding: 15px; border-radius: 8px; margin-bottom: 12px; }
+            .parcelas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+            .parcela-box { background: rgba(255,255,255,0.15); padding: 12px; border-radius: 6px; text-align: center; }
+            .parcela-box .titulo { font-size: 10px; opacity: 0.85; margin-bottom: 4px; }
+            .parcela-box .valor { font-size: 22px; font-weight: bold; }
+            .parcela-box .subtitulo { font-size: 9px; opacity: 0.7; margin-top: 2px; }
+            .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+            .economia { background: linear-gradient(135deg, #10B981, #059669); color: white; padding: 12px; border-radius: 6px; text-align: center; }
+            .economia .valor { font-size: 18px; font-weight: bold; }
+            .footer { margin-top: 15px; text-align: center; color: #999; font-size: 9px; padding-top: 12px; border-top: 1px solid #eee; }
+            .badge { display: inline-block; background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 15px; font-size: 10px; margin-bottom: 8px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th, td { padding: 6px; text-align: left; border-bottom: 1px solid #eee; font-size: 10px; }
             th { background: #f0f0f0; font-weight: bold; }
             .text-green { color: #10B981; }
-            .text-red { color: #EF4444; }
-            .text-blue { color: #4F46E5; }
+            .text-purple { color: #7C3AED; }
+            .text-blue { color: #3B82F6; }
+            .text-amber { color: #F59E0B; }
+            .lance-info { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+            .lance-box { background: #f0f0ff; padding: 8px; border-radius: 4px; text-align: center; }
+            .lance-box .titulo { font-size: 9px; color: #666; margin-bottom: 2px; }
+            .lance-box .valor { font-size: 12px; font-weight: bold; color: #4F46E5; }
           </style>
         </head>
         <body>
@@ -361,17 +425,31 @@ const Simulador = () => {
             <p>Cflow CRM - Gestão de Consórcios</p>
           </div>
 
+          <!-- CARD PRINCIPAL - MODELO OLOLU -->
           <div class="highlight">
-            <div class="badge">${sim?.categoria?.toUpperCase() || 'IMÓVEL'}</div>
-            <div class="label">Parcela Integral</div>
-            <div class="parcela">${formatarMoeda(sim?.parcela_mensal)}</div>
-            <div class="label" style="margin-top: 5px;">em ${sim?.prazo_meses} meses</div>
-            ${sim?.redutor_grupo > 0 ? `
-              <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.3);">
-                <div class="label">Parcela Reduzida (${sim?.redutor_grupo}% nas ${sim?.qtd_parcelas_reduzidas} primeiras)</div>
-                <div class="parcela" style="font-size: 24px; color: #86efac;">${formatarMoeda(sim?.parcela_reduzida_com_redutor)}</div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+              <div>
+                <div class="badge">${sim?.categoria?.toUpperCase() || 'IMÓVEL'}</div>
+                <div style="font-size: 11px; opacity: 0.9;">Crédito: <strong>${formatarMoeda(sim?.valor_credito)}</strong></div>
               </div>
-            ` : ''}
+              <div style="text-align: right; font-size: 10px; opacity: 0.85;">
+                ${sim?.prazo_meses} meses<br/>
+                Total: ${formatarMoeda(sim?.total_pagar)}
+              </div>
+            </div>
+
+            <div class="parcelas-grid">
+              <div class="parcela-box" style="background: rgba(251,191,36,0.2);">
+                <div class="titulo">Primeiras ${sim?.qtd_parcelas_antecipada} Parcelas</div>
+                <div class="valor" style="color: #fbbf24;">${formatarMoeda(sim?.parcela_primeiras)}</div>
+                <div class="subtitulo">(${sim?.percentual_antecipada}% antecipada)</div>
+              </div>
+              <div class="parcela-box" style="background: rgba(134,239,172,0.2);">
+                <div class="titulo">Demais Parcelas</div>
+                <div class="valor" style="color: #86efac;">${formatarMoeda(sim?.parcela_demais)}</div>
+                <div class="subtitulo">(parcela normal)</div>
+              </div>
+            </div>
           </div>
 
           <div class="grid-2">
@@ -381,107 +459,72 @@ const Simulador = () => {
               <div class="row"><span class="label">Prazo</span><span class="value">${sim?.prazo_meses} meses</span></div>
               <div class="row"><span class="label">Taxa Administrativa</span><span class="value">${sim?.taxa_administracao}%</span></div>
               <div class="row"><span class="label">Fundo de Reserva</span><span class="value">${sim?.fundo_reserva}%</span></div>
-              ${sim?.redutor_grupo > 0 ? `
-                <div class="row"><span class="label">Redutor do Grupo</span><span class="value text-green">${sim?.redutor_grupo}%</span></div>
-                <div class="row"><span class="label">Parcelas Reduzidas</span><span class="value">${sim?.qtd_parcelas_reduzidas} primeiras</span></div>
-              ` : ''}
+              <div class="row"><span class="label">Seguro Mensal</span><span class="value">${sim?.seguro_mensal}%</span></div>
+              <div class="row"><span class="label">Taxa Antecipada</span><span class="value text-amber">${sim?.percentual_antecipada}%</span></div>
             </div>
 
             <div class="section">
               <div class="section-title">COMPOSIÇÃO DO VALOR</div>
               <div class="row"><span class="label">Taxa Administrativa</span><span class="value">${formatarMoeda(sim?.valor_taxa_adm)}</span></div>
               <div class="row"><span class="label">Fundo de Reserva</span><span class="value">${formatarMoeda(sim?.valor_fundo_reserva)}</span></div>
-              <div class="row"><span class="label">Seguro de Vida</span><span class="value">${formatarMoeda(sim?.valor_seguro_total)}</span></div>
+              <div class="row"><span class="label">Seguro Total</span><span class="value">${formatarMoeda(sim?.valor_seguro_total)}</span></div>
+              <div class="row"><span class="label">Antecipada (${sim?.percentual_antecipada}%)</span><span class="value text-amber">${formatarMoeda(sim?.valor_antecipada)}</span></div>
               <div class="row"><span class="label"><strong>TOTAL A PAGAR</strong></span><span class="value text-blue"><strong>${formatarMoeda(sim?.total_pagar)}</strong></span></div>
             </div>
           </div>
 
-          ${sim?.redutor_grupo > 0 ? `
-          <div class="section" style="background: linear-gradient(135deg, #10B981, #059669); color: white;">
-            <div class="section-title" style="color: white; border-color: rgba(255,255,255,0.3);">REDUTOR DO GRUPO</div>
-            <div style="display: flex; justify-content: space-around; text-align: center;">
-              <div>
-                <div style="opacity: 0.9; font-size: 11px;">Parcela Integral</div>
-                <div style="font-size: 18px; font-weight: bold;">${formatarMoeda(sim?.parcela_mensal)}</div>
+          <!-- ESTUDO DE LANCE - MODELO OLOLU -->
+          <div class="section">
+            <div class="section-title">ESTUDO DE LANCE (sobre Total a Pagar)</div>
+
+            <div class="lance-info">
+              <div class="lance-box">
+                <div class="titulo">Lance Embutido (máx 30%)</div>
+                <div class="valor text-purple">${formatarMoeda(sim?.lance_embutido_max)}</div>
               </div>
-              <div>
-                <div style="opacity: 0.9; font-size: 11px;">${sim?.qtd_parcelas_reduzidas} Primeiras Parcelas</div>
-                <div style="font-size: 22px; font-weight: bold;">${formatarMoeda(sim?.parcela_reduzida_com_redutor)}</div>
+              <div class="lance-box">
+                <div class="titulo">+ Recurso Próprio</div>
+                <div class="valor text-blue">${formatarMoeda(sim?.recurso_proprio || 0)}</div>
               </div>
-              <div>
-                <div style="opacity: 0.9; font-size: 11px;">Economia</div>
-                <div style="font-size: 18px; font-weight: bold;">-${sim?.redutor_grupo}%</div>
+              <div class="lance-box" style="background: #e0e7ff;">
+                <div class="titulo">= Lance Máximo</div>
+                <div class="valor">${formatarMoeda(sim?.lance_livre?.total)}</div>
               </div>
             </div>
-          </div>
-          ` : `
-          <div class="section">
-            <div class="section-title">OPÇÕES DE PARCELAS REDUZIDAS</div>
-            <table>
-              <tr>
-                <th>Tipo</th>
-                <th>Percentual</th>
-                <th>Valor da Parcela</th>
-              </tr>
-              <tr>
-                <td>Parcela Integral</td>
-                <td>100%</td>
-                <td><strong>${formatarMoeda(sim?.parcela_mensal)}</strong></td>
-              </tr>
-              ${sim?.parcelas_reduzidas?.map(p => `
-                <tr>
-                  <td>Parcela Reduzida</td>
-                  <td>${p.percentual}%</td>
-                  <td class="text-green"><strong>${formatarMoeda(p.valor)}</strong></td>
-                </tr>
-              `).join('')}
-            </table>
-          </div>
-          `}
 
-          <div class="section">
-            <div class="section-title">ESTUDO DE OFERTA DE LANCE</div>
-            ${sim?.recurso_proprio > 0 ? `
-              <div style="background: linear-gradient(135deg, #3B82F6, #6366F1); color: white; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
-                <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">Seu Lance Máximo (Recurso Próprio + Embutido)</div>
-                <div style="display: flex; justify-content: space-around; text-align: center;">
-                  <div>
-                    <div style="font-size: 10px; opacity: 0.8;">Recurso Próprio</div>
-                    <div style="font-size: 14px; font-weight: bold;">${formatarMoeda(sim?.lance_livre?.recurso_proprio)}</div>
-                  </div>
-                  <div>
-                    <div style="font-size: 10px; opacity: 0.8;">+ Embutido (30%)</div>
-                    <div style="font-size: 14px; font-weight: bold;">${formatarMoeda(sim?.lance_livre?.lance_embutido)}</div>
-                  </div>
-                  <div>
-                    <div style="font-size: 10px; opacity: 0.8;">= Total</div>
-                    <div style="font-size: 16px; font-weight: bold;">${formatarMoeda(sim?.lance_livre?.total)}</div>
-                    <div style="font-size: 9px; opacity: 0.8;">${sim?.lance_livre?.representatividade?.toFixed(1)}% do crédito</div>
-                  </div>
-                </div>
-              </div>
-            ` : ''}
             <table>
               <tr>
-                <th>Lance (%)</th>
-                <th>Valor do Lance</th>
-                <th>Parcela Pós Lance</th>
+                <th>Lance %</th>
+                <th>Valor Total</th>
+                <th style="color: #7C3AED;">Embutido</th>
+                <th style="color: #3B82F6;">A Pagar</th>
+                <th style="color: #F59E0B;">Créd. Líquido</th>
+                <th style="color: #10B981;">Parcela Pós</th>
               </tr>
               ${sim?.lances?.map(l => `
                 <tr>
-                  <td>${l.percentual}%</td>
-                  <td>${formatarMoeda(l.valor)}</td>
-                  <td class="text-green">${formatarMoeda(l.parcelaPosLance)}</td>
+                  <td><strong>${l.percentual}%</strong><br/><small style="color:#999;">(${l.percentual_do_credito?.toFixed(1)}% créd)</small></td>
+                  <td><strong>${formatarMoeda(l.valor)}</strong></td>
+                  <td class="text-purple">${formatarMoeda(l.lance_embutido_usado)}</td>
+                  <td class="text-blue">${formatarMoeda(l.lance_a_pagar)}</td>
+                  <td class="text-amber">${formatarMoeda(l.credito_liquido)}</td>
+                  <td class="text-green"><strong>${formatarMoeda(l.parcelaPosLance)}</strong><br/><small style="color:#999;">${l.meses_restantes}m</small></td>
                 </tr>
               `).join('')}
             </table>
+            <div style="font-size: 8px; color: #666; margin-top: 6px; display: flex; gap: 15px;">
+              <span><strong class="text-purple">Embutido:</strong> vem do crédito (reduz créd. líquido)</span>
+              <span><strong class="text-blue">A Pagar:</strong> recurso próprio</span>
+              <span><strong class="text-amber">Créd. Líquido:</strong> crédito - embutido</span>
+            </div>
           </div>
 
+          <!-- PÓS CONTEMPLAÇÃO -->
           <div class="section">
             <div class="section-title">ESTIMATIVA PÓS CONTEMPLAÇÃO</div>
             <table>
               <tr>
-                <th>Contemplação</th>
+                <th>Mês</th>
                 <th>Saldo Devedor</th>
                 <th>Nova Parcela</th>
                 <th>Novo Prazo*</th>
@@ -491,22 +534,22 @@ const Simulador = () => {
                   <td>Mês ${p.mesContemplacao}</td>
                   <td>${formatarMoeda(p.saldoDevedor)}</td>
                   <td class="text-blue"><strong>${formatarMoeda(p.novaParcelaMantendoPrazo)}</strong></td>
-                  <td>${p.novoPrazoMantendoParcela} meses</td>
+                  <td>${p.novoPrazoMantendoParcela}m</td>
                 </tr>
               `).join('')}
             </table>
-            <div style="font-size: 9px; color: #666; margin-top: 5px;">* Novo prazo mantendo parcela de ${formatarMoeda(sim?.parcela_mensal)}</div>
+            <div style="font-size: 8px; color: #666; margin-top: 4px;">* Novo prazo mantendo parcela de ${formatarMoeda(sim?.parcela_mensal)}</div>
           </div>
 
           <div class="economia">
-            <div style="margin-bottom: 8px; opacity: 0.9;">Economia vs Financiamento (1,5% a.m.)</div>
+            <div style="margin-bottom: 4px; opacity: 0.9; font-size: 10px;">Economia vs Financiamento (1,5% a.m.)</div>
             <div class="valor">${formatarMoeda(sim?.comparativo_financiamento?.economia)}</div>
-            <div style="font-size: 12px; opacity: 0.9; margin-top: 5px;">(${sim?.comparativo_financiamento?.economia_percentual}% de economia)</div>
+            <div style="font-size: 10px; opacity: 0.9; margin-top: 3px;">(${sim?.comparativo_financiamento?.economia_percentual}% de economia)</div>
           </div>
 
           <div class="footer">
             <p>Simulação gerada em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
-            <p style="margin-top: 5px;">Cflow CRM - www.cflowcrm.com.br</p>
+            <p style="margin-top: 3px;">Cflow CRM - www.cflowcrm.com.br</p>
           </div>
         </body>
         </html>
@@ -658,6 +701,51 @@ const Simulador = () => {
                       />
                     </div>
                   </div>
+                </div>
+
+                {/* Taxa de Antecipada (modelo Ololu) */}
+                <div className="mb-6 p-4 bg-amber-50 rounded-xl border border-amber-200">
+                  <h3 className="text-sm font-semibold text-amber-800 mb-3 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Taxa de Antecipada
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Antecipada (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="10"
+                        value={percentualAntecipada}
+                        onChange={(e) => setPercentualAntecipada(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                        placeholder="2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Qtd. Parcelas
+                      </label>
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        max="200"
+                        value={qtdParcelasAntecipada}
+                        onChange={(e) => setQtdParcelasAntecipada(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                        placeholder="24"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-amber-600 mt-2">
+                    % do crédito diluído nas primeiras parcelas (modelo Ololu)
+                  </p>
                 </div>
 
                 {/* Redutor do Grupo e Parcelas Reduzidas */}
@@ -880,40 +968,66 @@ const Simulador = () => {
             <div className="xl:col-span-2 space-y-6" ref={resultadoRef}>
               {resultado ? (
                 <>
-                  {/* Card Principal */}
+                  {/* Card Principal - Modelo Ololu */}
                   <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl shadow-lg p-6 text-white">
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <div className="text-sm opacity-80 mb-1">{resultado.simulacao?.administradora_nome || 'Simulação Personalizada'}</div>
-                        <div className="text-4xl font-bold mb-2">
-                          {formatarMoeda(resultado.simulacao?.parcela_mensal)}
-                        </div>
-                        <div className="text-sm opacity-80">parcela integral • {resultado.simulacao?.prazo_meses} meses</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="bg-white/20 px-3 py-1 rounded-lg text-sm mb-2">
+                        <div className="bg-white/20 px-3 py-1 rounded-lg text-xs inline-block mb-2">
                           Crédito: {formatarMoeda(resultado.simulacao?.valor_credito)}
                         </div>
+                      </div>
+                      <div className="text-right">
                         <div className="bg-green-400/30 px-3 py-1 rounded-lg text-sm">
                           Economia: {formatarMoeda(resultado.simulacao?.comparativo_financiamento?.economia)}
                         </div>
                       </div>
                     </div>
 
-                    {/* Parcela Reduzida com Redutor do Grupo */}
+                    {/* Modelo Ololu: Primeiras X parcelas e Demais parcelas */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white/10 rounded-xl p-4 text-center">
+                        <div className="text-xs opacity-70 mb-1">
+                          Primeiras {resultado.simulacao?.qtd_parcelas_antecipada} parcelas
+                        </div>
+                        <div className="text-3xl font-bold text-amber-300">
+                          {formatarMoeda(resultado.simulacao?.parcela_primeiras)}
+                        </div>
+                        <div className="text-xs opacity-70 mt-1">
+                          ({resultado.simulacao?.percentual_antecipada}% antecipada)
+                        </div>
+                      </div>
+                      <div className="bg-white/10 rounded-xl p-4 text-center">
+                        <div className="text-xs opacity-70 mb-1">
+                          Demais Parcelas
+                        </div>
+                        <div className="text-3xl font-bold text-green-300">
+                          {formatarMoeda(resultado.simulacao?.parcela_demais)}
+                        </div>
+                        <div className="text-xs opacity-70 mt-1">
+                          (parcela normal)
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-center mt-3 text-sm opacity-80">
+                      {resultado.simulacao?.prazo_meses} meses • Total: {formatarMoeda(resultado.simulacao?.total_pagar)}
+                    </div>
+
+                    {/* Parcela com Redutor do Grupo (se configurado) */}
                     {resultado.simulacao?.redutor_grupo > 0 && (
-                      <div className="bg-white/10 rounded-xl p-4 mt-2">
+                      <div className="bg-green-500/20 rounded-xl p-3 mt-3 border border-green-400/30">
                         <div className="flex justify-between items-center">
                           <div>
-                            <div className="text-sm opacity-80">
-                              {resultado.simulacao?.qtd_parcelas_reduzidas} primeiras parcelas ({resultado.simulacao?.redutor_grupo}% redutor)
+                            <div className="text-xs opacity-80">
+                              Com Redutor do Grupo ({resultado.simulacao?.redutor_grupo}%)
                             </div>
-                            <div className="text-2xl font-bold text-green-300">
-                              {formatarMoeda(resultado.simulacao?.parcela_reduzida_com_redutor)}
+                            <div className="text-xs opacity-70">
+                              {resultado.simulacao?.qtd_parcelas_reduzidas} primeiras
                             </div>
                           </div>
-                          <div className="bg-green-400/30 px-3 py-1 rounded-lg text-sm">
-                            -{resultado.simulacao?.redutor_grupo}%
+                          <div className="text-xl font-bold text-green-300">
+                            {formatarMoeda(resultado.simulacao?.parcela_reduzida_com_redutor)}
                           </div>
                         </div>
                       </div>
@@ -1069,80 +1183,108 @@ const Simulador = () => {
                         </div>
                       )}
 
-                      {/* Estudo de Lance */}
+                      {/* Estudo de Lance - Modelo Ololu */}
                       {abaAtiva === 'lance' && (
                         <div className="space-y-4">
                           <p className="text-gray-600 text-sm mb-4">
-                            Lance é um valor que você oferece para antecipar sua contemplação.
-                            Pode ser composto de recurso próprio + lance embutido (até 30% do crédito).
+                            Lance é calculado sobre o <strong>Total a Pagar</strong> ({formatarMoeda(resultado.simulacao?.total_pagar)}).
+                            Pode ser composto de <span className="text-purple-600 font-medium">Lance Embutido</span> (até 30% do crédito) + <span className="text-blue-600 font-medium">Lance a Pagar</span> (recurso próprio).
                           </p>
 
-                          {/* Lance Livre - Recurso Próprio + Embutido */}
-                          {resultado.simulacao?.recurso_proprio > 0 && (
-                            <div className="bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl p-4 text-white mb-4">
-                              <h4 className="font-semibold mb-3 flex items-center gap-2">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                                </svg>
-                                Seu Lance Máximo (Livre)
-                              </h4>
-                              <div className="grid grid-cols-3 gap-4 text-center">
-                                <div className="bg-white/10 rounded-lg p-3">
-                                  <div className="text-xs opacity-80">Recurso Próprio</div>
-                                  <div className="text-lg font-bold">{formatarMoeda(resultado.simulacao?.lance_livre?.recurso_proprio)}</div>
-                                </div>
-                                <div className="bg-white/10 rounded-lg p-3">
-                                  <div className="text-xs opacity-80">+ Lance Embutido (30%)</div>
-                                  <div className="text-lg font-bold">{formatarMoeda(resultado.simulacao?.lance_livre?.lance_embutido)}</div>
-                                </div>
-                                <div className="bg-white/20 rounded-lg p-3">
-                                  <div className="text-xs opacity-80">= Total</div>
-                                  <div className="text-xl font-bold">{formatarMoeda(resultado.simulacao?.lance_livre?.total)}</div>
-                                  <div className="text-xs opacity-80">{resultado.simulacao?.lance_livre?.representatividade?.toFixed(1)}% do crédito</div>
-                                </div>
+                          {/* Informações de Lance Máximo */}
+                          <div className="bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl p-4 text-white mb-4">
+                            <h4 className="font-semibold mb-3 flex items-center gap-2">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                              </svg>
+                              Seu Lance Máximo
+                            </h4>
+                            <div className="grid grid-cols-4 gap-3 text-center">
+                              <div className="bg-white/10 rounded-lg p-3">
+                                <div className="text-xs opacity-80">Lance Embutido (30%)</div>
+                                <div className="text-lg font-bold">{formatarMoeda(resultado.simulacao?.lance_embutido_max)}</div>
+                              </div>
+                              <div className="bg-white/10 rounded-lg p-3">
+                                <div className="text-xs opacity-80">+ Recurso Próprio</div>
+                                <div className="text-lg font-bold">{formatarMoeda(resultado.simulacao?.recurso_proprio || 0)}</div>
+                              </div>
+                              <div className="bg-white/20 rounded-lg p-3">
+                                <div className="text-xs opacity-80">= Total Máximo</div>
+                                <div className="text-xl font-bold">{formatarMoeda(resultado.simulacao?.lance_livre?.total)}</div>
+                              </div>
+                              <div className="bg-white/10 rounded-lg p-3">
+                                <div className="text-xs opacity-80">% do Total a Pagar</div>
+                                <div className="text-lg font-bold">{resultado.simulacao?.lance_livre?.representatividade_total?.toFixed(1)}%</div>
                               </div>
                             </div>
-                          )}
+                          </div>
 
-                          {/* Tabela de Lances por Percentual */}
+                          {/* Tabela de Lances - Modelo Ololu */}
                           <div className="overflow-x-auto">
-                            <table className="w-full">
+                            <table className="w-full text-sm">
                               <thead>
-                                <tr className="bg-gray-50">
-                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Lance</th>
-                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor Total</th>
-                                  {resultado.simulacao?.recurso_proprio > 0 && (
-                                    <>
-                                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rec. Próprio</th>
-                                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Embutido</th>
-                                    </>
-                                  )}
-                                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Parcela Pós*</th>
+                                <tr className="bg-gray-100">
+                                  <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Lance %</th>
+                                  <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Total Lance</th>
+                                  <th className="px-2 py-3 text-left text-xs font-semibold text-purple-700 uppercase">Embutido</th>
+                                  <th className="px-2 py-3 text-left text-xs font-semibold text-blue-700 uppercase">A Pagar</th>
+                                  <th className="px-2 py-3 text-left text-xs font-semibold text-amber-700 uppercase">Créd. Líquido</th>
+                                  <th className="px-2 py-3 text-left text-xs font-semibold text-green-700 uppercase">Parcela Pós</th>
+                                  <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {resultado.simulacao?.lances?.map((lance, idx) => (
-                                  <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                    <td className="px-3 py-3">
-                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
-                                        {lance.percentual}%
-                                      </span>
+                                  <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${!lance.lance_viavel ? 'opacity-60' : ''}`}>
+                                    <td className="px-2 py-3">
+                                      <div className="flex flex-col">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                          lance.lance_viavel ? 'bg-primary-100 text-primary-800' : 'bg-red-100 text-red-800'
+                                        }`}>
+                                          {lance.percentual}%
+                                        </span>
+                                        <span className="text-[10px] text-gray-400 mt-0.5">
+                                          ({lance.percentual_do_credito?.toFixed(1)}% crédito)
+                                        </span>
+                                      </div>
                                     </td>
-                                    <td className="px-3 py-3 font-semibold text-gray-900">
+                                    <td className="px-2 py-3 font-bold text-gray-900">
                                       {formatarMoeda(lance.valor)}
                                     </td>
-                                    {resultado.simulacao?.recurso_proprio > 0 && (
-                                      <>
-                                        <td className="px-3 py-3 text-blue-600 text-sm">
-                                          {formatarMoeda(lance.recurso_proprio_usado)}
-                                        </td>
-                                        <td className="px-3 py-3 text-purple-600 text-sm">
-                                          {formatarMoeda(lance.lance_embutido_usado)}
-                                        </td>
-                                      </>
-                                    )}
-                                    <td className="px-3 py-3 font-semibold text-green-600">
-                                      {formatarMoeda(lance.parcelaPosLance)}
+                                    <td className="px-2 py-3">
+                                      <div className="flex flex-col">
+                                        <span className="font-semibold text-purple-600">{formatarMoeda(lance.lance_embutido_usado)}</span>
+                                        {lance.lance_embutido_usado >= resultado.simulacao?.lance_embutido_max && (
+                                          <span className="text-[10px] text-orange-500">(máx 30%)</span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="px-2 py-3 font-semibold text-blue-600">
+                                      {formatarMoeda(lance.lance_a_pagar)}
+                                    </td>
+                                    <td className="px-2 py-3 font-semibold text-amber-600">
+                                      {formatarMoeda(lance.credito_liquido)}
+                                    </td>
+                                    <td className="px-2 py-3">
+                                      <div className="flex flex-col">
+                                        <span className="font-bold text-green-600">{formatarMoeda(lance.parcelaPosLance)}</span>
+                                        <span className="text-[10px] text-gray-400">{lance.meses_restantes} meses</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-2 py-3">
+                                      {lance.lance_viavel ? (
+                                        <span className="inline-flex items-center gap-1 text-green-600 text-xs">
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                          </svg>
+                                          OK
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex flex-col text-red-600 text-xs">
+                                          <span className="font-semibold">Falta:</span>
+                                          <span>{formatarMoeda(lance.falta_para_lance)}</span>
+                                        </span>
+                                      )}
                                     </td>
                                   </tr>
                                 ))}
@@ -1150,20 +1292,31 @@ const Simulador = () => {
                             </table>
                           </div>
 
-                          <div className="text-xs text-gray-500 mt-2">
-                            * Parcela considerando lance embutido (valor abatido do saldo devedor)
+                          <div className="grid grid-cols-2 gap-4 text-xs">
+                            <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                              <div className="font-semibold text-purple-800 mb-1">Lance Embutido</div>
+                              <p className="text-purple-600">
+                                Até 30% do crédito. Vem do próprio crédito - reduz o "Crédito Líquido" para comprar o bem.
+                              </p>
+                            </div>
+                            <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                              <div className="font-semibold text-blue-800 mb-1">Lance a Pagar</div>
+                              <p className="text-blue-600">
+                                Valor que você paga do próprio bolso (recurso próprio). Não afeta o crédito.
+                              </p>
+                            </div>
                           </div>
 
-                          <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                          <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
                             <div className="flex items-start gap-2">
-                              <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-5 h-5 text-amber-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                               </svg>
                               <div>
-                                <div className="font-medium text-blue-800">Dica</div>
-                                <div className="text-sm text-blue-700">
-                                  Lances entre 20% e 30% do crédito costumam ter boas chances de contemplação em assembleias.
-                                  Consulte o histórico de lances vencedores da administradora.
+                                <div className="font-medium text-amber-800">Crédito Líquido</div>
+                                <div className="text-sm text-amber-700">
+                                  É o valor que sobra para comprar o bem após usar o lance embutido.
+                                  Ex: Crédito R$ 480.000 - Lance Embutido R$ 144.000 (30%) = <strong>Crédito Líquido R$ 336.000</strong>
                                 </div>
                               </div>
                             </div>
