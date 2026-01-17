@@ -17,6 +17,7 @@ import billingRoutes from './routes/billingRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import adminAssinaturaRoutes from './routes/adminAssinaturaRoutes.js';
 import atividadeRoutes from './routes/atividadeRoutes.js';
+import websiteLeadsRoutes from './routes/websiteLeadsRoutes.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import { authenticateToken } from './middleware/auth.js';
 
@@ -28,10 +29,27 @@ const PORT = process.env.PORT || 3001;
 
 // Middlewares de Segurança
 app.use(helmet()); // Adiciona headers de segurança HTTP
+
+// CORS configurado para múltiplas origens
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'https://cflow-website.vercel.app',
+  'https://cflow-gestor.vercel.app',
+  'http://localhost:5500',
+  'http://127.0.0.1:5500'
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true);
+    }
+  },
   credentials: true
-})); // CORS configurado com origem específica
+}));
 
 app.use(express.json({ limit: '10mb' })); // Parser de JSON com limite de 10MB
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Parser de URL encoded
@@ -59,6 +77,9 @@ app.use('/api/webhooks', webhookRoutes); // Webhooks do gateway (sem auth)
 
 // Rotas de Super Admin (gerenciamento de empresas/assinaturas)
 app.use('/api/admin', adminAssinaturaRoutes);
+
+// Rotas de Leads do Website (público + super admin)
+app.use('/api/leads/website', websiteLeadsRoutes);
 
 // Rota de teste
 app.get('/', (req, res) => {
