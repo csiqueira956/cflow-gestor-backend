@@ -206,6 +206,14 @@ export const superAdminAPI = {
   exportEmpresas: () => api.get('/admin/export/empresas', { responseType: 'blob' }),
   exportUsuarios: () => api.get('/admin/export/usuarios', { responseType: 'blob' }),
   exportFinanceiro: () => api.get('/admin/export/financeiro', { responseType: 'blob' }),
+
+  // Website Leads
+  listarLeads: (params) => api.get('/leads/website', { params }),
+  statsLeads: () => api.get('/leads/website/stats'),
+  detalhesLead: (id) => api.get(`/leads/website/${id}`),
+  atualizarStatusLead: (id, data) => api.patch(`/leads/website/${id}/status`, data),
+  atribuirLead: (id, data) => api.patch(`/leads/website/${id}/atribuir`, data),
+  deletarLead: (id) => api.delete(`/leads/website/${id}`),
 };
 
 // Funções do Simulador de Consórcio

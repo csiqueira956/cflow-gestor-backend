@@ -46,6 +46,11 @@ const SuperAdminPanel = () => {
   const [mrrHistory, setMrrHistory] = useState([]);
   const [loadingMrr, setLoadingMrr] = useState(false);
   const [exportando, setExportando] = useState({});
+  const [leads, setLeads] = useState([]);
+  const [leadsStats, setLeadsStats] = useState(null);
+  const [loadingLeads, setLoadingLeads] = useState(false);
+  const [leadsPagination, setLeadsPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [leadsFilter, setLeadsFilter] = useState({ status: '', busca: '' });
   const [novoUsuarioForm, setNovoUsuarioForm] = useState({
     nome: '',
     email: '',
@@ -119,13 +124,69 @@ const SuperAdminPanel = () => {
   useEffect(() => {
     const handleTabChange = (event) => {
       const tab = event.detail;
-      if (['dashboard', 'empresas', 'planos', 'monitoramento'].includes(tab)) {
+      if (['dashboard', 'empresas', 'planos', 'monitoramento', 'leads'].includes(tab)) {
         setActiveTab(tab);
       }
     };
     window.addEventListener('superAdminTabChange', handleTabChange);
     return () => window.removeEventListener('superAdminTabChange', handleTabChange);
   }, []);
+
+  // Carregar leads quando a tab mudar
+  useEffect(() => {
+    if (activeTab === 'leads') {
+      carregarLeads();
+      carregarLeadsStats();
+    }
+  }, [activeTab, leadsFilter]);
+
+  const carregarLeads = async (page = 1) => {
+    try {
+      setLoadingLeads(true);
+      const response = await superAdminAPI.listarLeads({
+        page,
+        status: leadsFilter.status || undefined,
+        busca: leadsFilter.busca || undefined,
+      });
+      setLeads(response.data.leads || []);
+      setLeadsPagination(response.data.pagination || { page: 1, totalPages: 1, total: 0 });
+    } catch {
+      toast.error('Erro ao carregar leads');
+    } finally {
+      setLoadingLeads(false);
+    }
+  };
+
+  const carregarLeadsStats = async () => {
+    try {
+      const response = await superAdminAPI.statsLeads();
+      setLeadsStats(response.data.stats || null);
+    } catch {
+      console.error('Erro ao carregar estatísticas de leads');
+    }
+  };
+
+  const handleAtualizarStatusLead = async (leadId, novoStatus) => {
+    try {
+      await superAdminAPI.atualizarStatusLead(leadId, { status: novoStatus });
+      toast.success('Status atualizado!');
+      carregarLeads(leadsPagination.page);
+      carregarLeadsStats();
+    } catch {
+      toast.error('Erro ao atualizar status');
+    }
+  };
+
+  const handleDeletarLead = async (leadId) => {
+    try {
+      await superAdminAPI.deletarLead(leadId);
+      toast.success('Lead excluído!');
+      carregarLeads(leadsPagination.page);
+      carregarLeadsStats();
+    } catch {
+      toast.error('Erro ao excluir lead');
+    }
+  };
 
   const carregarDados = async () => {
     try {
@@ -734,6 +795,19 @@ const SuperAdminPanel = () => {
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                 </span>
                 Monitoramento
+              </button>
+              <button
+                onClick={() => setActiveTab('leads')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
+                  activeTab === 'leads'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Leads {leadsStats ? `(${leadsStats.novos || 0})` : ''}
               </button>
             </nav>
           </div>
@@ -1510,6 +1584,211 @@ const SuperAdminPanel = () => {
                   </svg>
                   <p>Nenhum usuário encontrado</p>
                   <p className="text-sm mt-1">Execute a migration para ativar o rastreamento de sessões</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab Content - Leads do Website */}
+          {activeTab === 'leads' && (
+            <div>
+              {/* Header com filtros */}
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                <div>
+                  <h2 className="text-lg font-medium text-gray-900">Leads do Website</h2>
+                  <p className="text-sm text-gray-500">Contatos capturados através do site cflow-website</p>
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={leadsFilter.status}
+                    onChange={(e) => setLeadsFilter(prev => ({ ...prev, status: e.target.value }))}
+                    className="input-field py-2 text-sm"
+                  >
+                    <option value="">Todos os status</option>
+                    <option value="novo">Novos</option>
+                    <option value="em_analise">Em Análise</option>
+                    <option value="contatado">Contatados</option>
+                    <option value="convertido">Convertidos</option>
+                    <option value="descartado">Descartados</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Buscar..."
+                    value={leadsFilter.busca}
+                    onChange={(e) => setLeadsFilter(prev => ({ ...prev, busca: e.target.value }))}
+                    className="input-field py-2 text-sm w-48"
+                  />
+                  <button
+                    onClick={() => carregarLeads(1)}
+                    disabled={loadingLeads}
+                    className="btn-secondary flex items-center gap-2"
+                  >
+                    <svg className={`w-4 h-4 ${loadingLeads ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Atualizar
+                  </button>
+                </div>
+              </div>
+
+              {/* Cards de Estatísticas */}
+              {leadsStats && (
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                    <div className="text-2xl font-bold text-blue-600">{leadsStats.total || 0}</div>
+                    <div className="text-sm text-blue-800">Total</div>
+                  </div>
+                  <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                    <div className="text-2xl font-bold text-yellow-600">{leadsStats.novos || 0}</div>
+                    <div className="text-sm text-yellow-800">Novos</div>
+                  </div>
+                  <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                    <div className="text-2xl font-bold text-purple-600">{leadsStats.em_analise || 0}</div>
+                    <div className="text-sm text-purple-800">Em Análise</div>
+                  </div>
+                  <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200">
+                    <div className="text-2xl font-bold text-cyan-600">{leadsStats.contatados || 0}</div>
+                    <div className="text-sm text-cyan-800">Contatados</div>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                    <div className="text-2xl font-bold text-green-600">{leadsStats.convertidos || 0}</div>
+                    <div className="text-sm text-green-800">Convertidos</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="text-2xl font-bold text-gray-600">{leadsStats.ultimos_7_dias || 0}</div>
+                    <div className="text-sm text-gray-800">Últimos 7 dias</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tabela de Leads */}
+              {loadingLeads ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                  <p className="text-gray-500">Carregando leads...</p>
+                </div>
+              ) : leads.length > 0 ? (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contato</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Empresa</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Origem</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {leads.map((lead) => (
+                          <tr key={lead.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-gray-900">{lead.nome}</div>
+                              <div className="text-sm text-gray-500">{lead.email}</div>
+                              {lead.telefone && <div className="text-sm text-gray-400">{lead.telefone}</div>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-sm text-gray-900">{lead.empresa || '-'}</div>
+                              {lead.tamanho_equipe && <div className="text-xs text-gray-400">{lead.tamanho_equipe} pessoas</div>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <select
+                                value={lead.status}
+                                onChange={(e) => handleAtualizarStatusLead(lead.id, e.target.value)}
+                                className={`text-xs font-medium rounded-full px-2 py-1 border-0 cursor-pointer ${
+                                  lead.status === 'novo' ? 'bg-yellow-100 text-yellow-800' :
+                                  lead.status === 'em_analise' ? 'bg-purple-100 text-purple-800' :
+                                  lead.status === 'contatado' ? 'bg-cyan-100 text-cyan-800' :
+                                  lead.status === 'convertido' ? 'bg-green-100 text-green-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}
+                              >
+                                <option value="novo">Novo</option>
+                                <option value="em_analise">Em Análise</option>
+                                <option value="contatado">Contatado</option>
+                                <option value="convertido">Convertido</option>
+                                <option value="descartado">Descartado</option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {lead.origem || 'website'}
+                              {lead.utm_source && <div className="text-xs text-gray-400">via {lead.utm_source}</div>}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+                              <div className="text-xs text-gray-400">
+                                {new Date(lead.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex gap-2">
+                                {lead.mensagem && (
+                                  <button
+                                    onClick={() => toast(lead.mensagem, { duration: 5000, icon: '💬' })}
+                                    className="text-blue-600 hover:text-blue-800"
+                                    title="Ver mensagem"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                    </svg>
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    if (confirm('Excluir este lead?')) handleDeletarLead(lead.id);
+                                  }}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Excluir"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Paginação */}
+                  {leadsPagination.totalPages > 1 && (
+                    <div className="flex justify-between items-center mt-4 pt-4 border-t">
+                      <p className="text-sm text-gray-500">
+                        Mostrando {leads.length} de {leadsPagination.total} leads
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => carregarLeads(leadsPagination.page - 1)}
+                          disabled={leadsPagination.page <= 1}
+                          className="btn-secondary px-3 py-1 text-sm disabled:opacity-50"
+                        >
+                          Anterior
+                        </button>
+                        <span className="px-3 py-1 text-sm text-gray-600">
+                          Página {leadsPagination.page} de {leadsPagination.totalPages}
+                        </span>
+                        <button
+                          onClick={() => carregarLeads(leadsPagination.page + 1)}
+                          disabled={leadsPagination.page >= leadsPagination.totalPages}
+                          className="btn-secondary px-3 py-1 text-sm disabled:opacity-50"
+                        >
+                          Próxima
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <svg className="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <p>Nenhum lead encontrado</p>
+                  <p className="text-sm mt-1">Os leads capturados pelo site aparecerão aqui</p>
                 </div>
               )}
             </div>
