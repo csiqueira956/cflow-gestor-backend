@@ -1,0 +1,114 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: #0a4ee4;
+    --purple: #7c3aed;
+    --secondary: #001647;
+    --green: #10b981;
+    --bg: #f8fafc;
+    --text: #1e293b;
+    --gray: #64748b;
+  }
+
+  body {
+    @apply bg-accent-50 text-accent-800;
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', 'Poppins', 'Inter', sans-serif;
+    @apply font-bold;
+  }
+}
+
+@layer components {
+  /* Botão Gradiente Principal - CFlow */
+  .btn-gradient {
+    @apply text-white px-6 py-3 rounded-xl font-semibold transition-all;
+    background: linear-gradient(135deg, #0a4ee4, #7c3aed);
+  }
+
+  .btn-gradient:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(10,78,228,0.4);
+  }
+
+  .btn-primary {
+    @apply text-white px-6 py-3 rounded-xl transition-all font-semibold;
+    background: linear-gradient(135deg, #0a4ee4, #7c3aed);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(10,78,228,0.4);
+  }
+
+  .btn-accent {
+    @apply text-white px-6 py-3 rounded-xl transition-all font-semibold;
+    background: linear-gradient(135deg, #0a4ee4, #7c3aed);
+  }
+
+  .btn-accent:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(10,78,228,0.4);
+  }
+
+  .btn-secondary {
+    @apply bg-gray-200 text-accent-800 px-6 py-3 rounded-xl hover:bg-gray-300 transition-colors font-semibold;
+  }
+
+  .btn-danger {
+    @apply bg-red-600 text-white px-6 py-3 rounded-xl hover:bg-red-700 transition-colors font-semibold;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-accent-900 px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors font-semibold;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 border border-accent-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all bg-white;
+  }
+
+  .card {
+    @apply bg-white rounded-cflow-lg p-6 border border-accent-200 transition-all;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+  }
+
+  .card-feature {
+    @apply bg-white rounded-cflow-lg p-8 border border-accent-200 transition-all;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  }
+
+  .card-feature:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+  }
+
+  /* Seção com barra lateral gradiente */
+  .section-header::before {
+    content: '';
+    width: 4px;
+    height: 28px;
+    background: linear-gradient(180deg, #0a4ee4, #7c3aed);
+    border-radius: 2px;
+    margin-right: 12px;
+  }
+
+  /* Texto com gradiente */
+  .text-gradient {
+    background: linear-gradient(135deg, #0a4ee4, #7c3aed);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
