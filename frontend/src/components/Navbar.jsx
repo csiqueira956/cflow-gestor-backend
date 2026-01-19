@@ -173,11 +173,11 @@ const Navbar = () => {
         <div className="flex items-center justify-between p-4 border-b border-accent-200">
           {isExpanded ? (
             <Link to="/dashboard" className="flex items-center hover:opacity-80 transition-opacity">
-              <Logo className="w-10 h-10" textSize="text-lg" />
+              <Logo className="w-10 h-10" size={40} />
             </Link>
           ) : (
             <Link to="/dashboard" className="mx-auto">
-              <Logo className="w-10 h-10" showText={false} />
+              <Logo className="w-10 h-10" size={40} showText={false} />
             </Link>
           )}
 
@@ -267,12 +267,12 @@ const Navbar = () => {
                 to={item.path}
                 className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all relative ${
                   isActive(item.path)
-                    ? 'bg-primary-50 text-primary-600 font-semibold'
-                    : 'text-accent-700 hover:bg-accent-100'
+                    ? 'bg-primary-50 font-semibold'
+                    : 'text-accent-600 hover:bg-accent-50'
                 } ${!isExpanded && 'justify-center'}`}
+                style={isActive(item.path) ? { color: '#0a4ee4' } : {}}
                 title={!isExpanded ? item.label : ''}
               >
-                {/* Barra indicadora gradiente */}
                 {isActive(item.path) && (
                   <div
                     className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full"
@@ -293,11 +293,12 @@ const Navbar = () => {
               <div>
                 <button
                   onClick={() => setConfigOpen(!configOpen)}
-                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all relative ${
                     isConfigPath()
-                      ? 'bg-primary-50 text-primary-600 font-semibold'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-primary-50 font-semibold'
+                      : 'text-accent-600 hover:bg-accent-50'
                   } ${!isExpanded && 'justify-center'}`}
+                  style={isConfigPath() ? { color: '#0a4ee4' } : {}}
                   title={!isExpanded ? 'Configurações' : ''}
                 >
                   <div className="flex-shrink-0">
@@ -328,11 +329,12 @@ const Navbar = () => {
                       <Link
                         key={subItem.path}
                         to={subItem.path}
-                        className={`flex items-center gap-3 pl-12 pr-3 py-2 rounded-lg transition-all text-sm ${
+                        className={`flex items-center gap-3 pl-12 pr-3 py-2 rounded-xl transition-all text-sm ${
                           isActive(subItem.path)
-                            ? 'bg-primary-50 text-primary-600 font-semibold'
-                            : 'text-gray-600 hover:bg-gray-100'
+                            ? 'bg-primary-50 font-semibold'
+                            : 'text-accent-500 hover:bg-accent-50'
                         }`}
+                        style={isActive(subItem.path) ? { color: '#0a4ee4' } : {}}
                       >
                         {subItem.label}
                       </Link>
@@ -347,11 +349,12 @@ const Navbar = () => {
               <div>
                 <button
                   onClick={() => setSuperAdminOpen(!superAdminOpen)}
-                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all relative ${
                     isSuperAdminPath()
-                      ? 'bg-blue-50 text-blue-600 font-semibold'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-purple-50 font-semibold'
+                      : 'text-accent-600 hover:bg-accent-50'
                   } ${!isExpanded && 'justify-center'}`}
+                  style={isSuperAdminPath() ? { color: '#7c3aed' } : {}}
                   title={!isExpanded ? 'Super Admin' : ''}
                 >
                   <div className="flex-shrink-0">
@@ -387,10 +390,10 @@ const Navbar = () => {
                             window.dispatchEvent(new CustomEvent('superAdminTabChange', { detail: subItem.hash || 'dashboard' }));
                           }, 100);
                         }}
-                        className={`w-full flex items-center gap-3 pl-12 pr-3 py-2 rounded-lg transition-all text-sm text-left ${
+                        className={`w-full flex items-center gap-3 pl-12 pr-3 py-2 rounded-xl transition-all text-sm text-left ${
                           isSuperAdminPath()
-                            ? 'text-blue-600 hover:bg-blue-50'
-                            : 'text-gray-600 hover:bg-gray-100'
+                            ? 'text-purple-600 hover:bg-purple-50'
+                            : 'text-accent-500 hover:bg-accent-50'
                         }`}
                       >
                         {subItem.label}
@@ -409,11 +412,11 @@ const Navbar = () => {
             <div className="space-y-3">
               <Link
                 to="/perfil"
-                className="flex items-center gap-3 p-2 rounded-xl hover:bg-accent-100 transition-colors"
+                className="flex items-center gap-3 p-2 rounded-xl hover:bg-accent-50 transition-colors"
               >
                 <div
-                  className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0"
-                  style={{ background: usuario?.foto_perfil ? 'transparent' : 'linear-gradient(135deg, #0a4ee4, #7c3aed)' }}
+                  className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #0a4ee4, #7c3aed)' }}
                 >
                   {usuario?.foto_perfil ? (
                     <img
@@ -428,13 +431,18 @@ const Navbar = () => {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-accent-800 truncate">{usuario?.nome}</p>
-                  <p className="text-xs text-primary-500 capitalize font-medium">{usuario?.role}</p>
+                  <p className="text-sm font-semibold text-accent-800 truncate">{usuario?.nome}</p>
+                  <p
+                    className="text-xs capitalize font-medium"
+                    style={{ color: '#0a4ee4' }}
+                  >
+                    {usuario?.role}
+                  </p>
                 </div>
               </Link>
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm"
+                className="w-full flex items-center justify-center gap-2 bg-accent-100 text-accent-700 px-4 py-2 rounded-xl hover:bg-accent-200 transition-colors font-semibold text-sm"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -446,12 +454,12 @@ const Navbar = () => {
             <div className="space-y-3">
               <Link
                 to="/perfil"
-                className="flex justify-center p-2 rounded-xl hover:bg-accent-100 transition-colors"
+                className="flex justify-center p-2 rounded-xl hover:bg-accent-50 transition-colors"
                 title="Perfil"
               >
                 <div
-                  className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center"
-                  style={{ background: usuario?.foto_perfil ? 'transparent' : 'linear-gradient(135deg, #0a4ee4, #7c3aed)' }}
+                  className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg, #0a4ee4, #7c3aed)' }}
                 >
                   {usuario?.foto_perfil ? (
                     <img
@@ -468,7 +476,7 @@ const Navbar = () => {
               </Link>
               <button
                 onClick={handleLogout}
-                className="w-full flex justify-center p-2 rounded-xl hover:bg-accent-100 transition-colors"
+                className="w-full flex justify-center p-2 rounded-xl hover:bg-accent-50 transition-colors"
                 title="Sair"
               >
                 <svg className="w-6 h-6 text-accent-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

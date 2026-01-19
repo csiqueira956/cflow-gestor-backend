@@ -289,13 +289,24 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #0a4ee4 0%, #7c3aed 100%)' }}>
-      <div className="bg-white rounded-[20px] w-full max-w-md p-8" style={{ boxShadow: '0 12px 24px rgba(0,0,0,0.1)' }}>
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: 'linear-gradient(135deg, #0a4ee4 0%, #7c3aed 100%)' }}
+    >
+      <div className="bg-white rounded-[20px] shadow-2xl w-full max-w-md p-8">
         {/* Logo e título */}
         <div className="flex flex-col items-center mb-8">
           <Logo className="w-16 h-16 mb-4" size={64} showText={false} />
-          <h1 className="text-3xl font-bold mb-2" style={{ background: 'linear-gradient(135deg, #0a4ee4, #7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-            cflow CRM
+          <h1
+            className="text-3xl font-extrabold mb-2"
+            style={{
+              background: 'linear-gradient(135deg, #0a4ee4, #7c3aed)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }}
+          >
+            cflow
           </h1>
           <p className="text-accent-500">
             {modoRegistro ? 'Complete seu cadastro para começar' : 'Faça login para continuar'}
@@ -519,9 +530,13 @@ const Login = () => {
         {/* Link para cadastro */}
         {!modoRegistro && (
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-accent-500">
               Não tem uma conta?{' '}
-              <Link to="/cadastro" className="text-primary-600 hover:text-primary-700 font-semibold">
+              <Link
+                to="/cadastro"
+                className="font-semibold hover:underline"
+                style={{ color: '#0a4ee4' }}
+              >
                 Criar conta grátis
               </Link>
             </p>
@@ -530,13 +545,21 @@ const Login = () => {
 
         {/* Links legais */}
         <div className="mt-6 text-center">
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-accent-500">
             Ao usar este sistema, você concorda com nossos{' '}
-            <Link to="/termos-de-uso" className="text-primary-600 hover:text-primary-700 underline">
+            <Link
+              to="/termos-de-uso"
+              className="underline hover:no-underline"
+              style={{ color: '#0a4ee4' }}
+            >
               Termos de Uso
             </Link>{' '}
             e{' '}
-            <Link to="/politica-privacidade" className="text-primary-600 hover:text-primary-700 underline">
+            <Link
+              to="/politica-privacidade"
+              className="underline hover:no-underline"
+              style={{ color: '#0a4ee4' }}
+            >
               Política de Privacidade
             </Link>
           </p>
