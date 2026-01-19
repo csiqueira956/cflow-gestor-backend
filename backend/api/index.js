@@ -4321,7 +4321,7 @@ app.get('/api/analytics/mrr', verifySuperAdmin, async (req, res) => {
     const result = await pool.query(`
       WITH meses AS (
         SELECT generate_series(
-          DATE_TRUNC('month', CURRENT_DATE - INTERVAL '${periodo} months'),
+          DATE_TRUNC('month', CURRENT_DATE - ($1 || ' months')::interval),
           DATE_TRUNC('month', CURRENT_DATE),
           '1 month'::interval
         ) AS mes
@@ -4341,7 +4341,7 @@ app.get('/api/analytics/mrr', verifySuperAdmin, async (req, res) => {
       FROM meses m
       LEFT JOIN mrr_por_mes mrr ON m.mes = mrr.mes
       ORDER BY m.mes
-    `);
+    `, [periodo.toString()]);
 
     res.json({
       success: true,
@@ -4364,7 +4364,7 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
     const result = await pool.query(`
       WITH meses AS (
         SELECT generate_series(
-          DATE_TRUNC('month', CURRENT_DATE - INTERVAL '${periodo} months'),
+          DATE_TRUNC('month', CURRENT_DATE - ($1 || ' months')::interval),
           DATE_TRUNC('month', CURRENT_DATE),
           '1 month'::interval
         ) AS mes
@@ -4397,7 +4397,7 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
       LEFT JOIN trials_por_mes t ON m.mes = t.mes
       LEFT JOIN conversoes_por_mes c ON m.mes = c.mes
       ORDER BY m.mes
-    `);
+    `, [periodo.toString()]);
 
     res.json({
       success: true,
@@ -4422,7 +4422,7 @@ app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
     const result = await pool.query(`
       WITH meses AS (
         SELECT generate_series(
-          DATE_TRUNC('month', CURRENT_DATE - INTERVAL '${periodo} months'),
+          DATE_TRUNC('month', CURRENT_DATE - ($1 || ' months')::interval),
           DATE_TRUNC('month', CURRENT_DATE),
           '1 month'::interval
         ) AS mes
@@ -4456,7 +4456,7 @@ app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
       LEFT JOIN ativos_por_mes a ON m.mes = a.mes
       LEFT JOIN cancelados_por_mes c ON m.mes = c.mes
       ORDER BY m.mes
-    `);
+    `, [periodo.toString()]);
 
     res.json({
       success: true,
