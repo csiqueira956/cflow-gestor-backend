@@ -7,41 +7,67 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Azul vibrante - Cor principal (CFlow)
+        // Azul principal CFlow - C Notch Gradient
         primary: {
-          50: '#E6F0FF',
-          100: '#CCE0FF',
-          200: '#99C2FF',
-          300: '#66A3FF',
-          400: '#3385FF',
-          500: '#0066FF', // Azul vibrante base
-          600: '#0052CC',
-          700: '#0047B3',
-          800: '#003D99',
-          900: '#003380',
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#0a4ee4', // Azul principal Brand Kit
+          600: '#0842c0',
+          700: '#06369c',
+          800: '#052a78',
+          900: '#001647', // Secondary do Brand Kit
         },
-        // Cinza sofisticado - Cor de destaque/neutro
+        // Roxo para gradientes
+        purple: {
+          50: '#f5f3ff',
+          100: '#ede9fe',
+          200: '#ddd6fe',
+          300: '#c4b5fd',
+          400: '#a78bfa',
+          500: '#7c3aed', // Roxo Brand Kit
+          600: '#6d28d9',
+          700: '#5b21b6',
+          800: '#4c1d95',
+          900: '#2e1065',
+        },
+        // Cinza sofisticado
         accent: {
-          50: '#FAFAFA',
-          100: '#F5F5F5',
-          200: '#E5E5E5',
-          300: '#D4D4D4',
-          400: '#A3A3A3',
-          500: '#737373',
-          600: '#525252',
-          700: '#404040',
-          800: '#262626',
-          900: '#171717',
+          50: '#f8fafc',
+          100: '#f1f5f9',
+          200: '#e2e8f0',
+          300: '#cbd5e1',
+          400: '#94a3b8',
+          500: '#64748b', // Gray do Brand Kit
+          600: '#475569',
+          700: '#334155',
+          800: '#1e293b', // Text do Brand Kit
+          900: '#0f172a',
         },
         // Verde para sucesso
         success: {
-          500: '#00C853',
-          600: '#00A845',
+          500: '#10b981', // Green do Brand Kit
+          600: '#059669',
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        heading: ['Poppins', 'Inter', 'sans-serif'],
+        sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        heading: ['Plus Jakarta Sans', 'Poppins', 'Inter', 'sans-serif'],
+      },
+      backgroundImage: {
+        'gradient-cflow': 'linear-gradient(135deg, #0a4ee4 0%, #7c3aed 100%)',
+        'gradient-cflow-dark': 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
+      },
+      boxShadow: {
+        'cflow': '0 4px 20px rgba(0,0,0,0.08)',
+        'cflow-lg': '0 12px 24px rgba(0,0,0,0.1)',
+        'cflow-btn': '0 8px 20px rgba(10,78,228,0.4)',
+      },
+      borderRadius: {
+        'cflow': '14px',
+        'cflow-lg': '20px',
       },
     },
   },

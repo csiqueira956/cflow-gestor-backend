@@ -2,12 +2,65 @@ import { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import Navbar from '../components/Navbar';
 
+// === ÍCONES SVG ===
+const IconHome = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+  </svg>
+);
+const IconCar = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+  </svg>
+);
+const IconTruck = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+  </svg>
+);
+const IconBike = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+  </svg>
+);
+const IconSun = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+const IconMoney = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+const IconClipboard = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+  </svg>
+);
+const IconTarget = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+  </svg>
+);
+const IconChart = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+  </svg>
+);
+const IconCalculator = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+  </svg>
+);
+
 // === CONFIGURAÇÃO DAS CATEGORIAS ===
 const CATEGORIAS = {
   imovel: {
     id: 'imovel',
     nome: 'Imóvel',
-    icon: '🏠',
+    icon: IconHome,
     taxaAdministrativa: 0.17,
     fundoReserva: 0.02,
     seguroVida: 0.00031,
@@ -20,7 +73,7 @@ const CATEGORIAS = {
   auto: {
     id: 'auto',
     nome: 'Auto',
-    icon: '🚗',
+    icon: IconCar,
     taxaAdministrativa: 0.18,
     fundoReserva: 0.02,
     seguroVida: 0.00035,
@@ -33,7 +86,7 @@ const CATEGORIAS = {
   pesados: {
     id: 'pesados',
     nome: 'Pesados',
-    icon: '🚚',
+    icon: IconTruck,
     taxaAdministrativa: 0.14,
     fundoReserva: 0.02,
     seguroVida: 0.00035,
@@ -46,7 +99,7 @@ const CATEGORIAS = {
   bike: {
     id: 'bike',
     nome: 'Bike',
-    icon: '🏍️',
+    icon: IconBike,
     taxaAdministrativa: 0.22,
     fundoReserva: 0.04,
     seguroVida: 0.00035,
@@ -59,7 +112,7 @@ const CATEGORIAS = {
   solar: {
     id: 'solar',
     nome: 'Solar',
-    icon: '☀️',
+    icon: IconSun,
     taxaAdministrativa: 0.22,
     fundoReserva: 0.04,
     seguroVida: 0.00035,
@@ -803,13 +856,7 @@ const SimuladorV2 = () => {
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="mb-8">
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-gray-900">Simulador V2</h1>
-              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-sm font-medium rounded-full">
-                Modelo Documento
-              </span>
-            </div>
-            <p className="text-gray-600 mt-2">Versão com Piso 50%, Adesão e Campanha Parcela Original</p>
+            <h1 className="text-3xl font-bold text-gray-900">Simulador de Consórcio</h1>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -846,7 +893,7 @@ const SimuladorV2 = () => {
                             : 'border-gray-200 hover:border-gray-300'
                         }`}
                       >
-                        <span className="text-xl mb-1">{cat.icon}</span>
+                        <span className="mb-1 text-current">{<cat.icon />}</span>
                         <span className="text-xs font-medium">{cat.nome}</span>
                       </button>
                     ))}
@@ -1022,7 +1069,7 @@ const SimuladorV2 = () => {
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >
-                          <div className="font-medium">📊 Percentual</div>
+                          <div className="font-medium flex items-center gap-1"><IconChart /> Percentual</div>
                           <div className="text-xs text-gray-500">Ex: 50% de redução</div>
                         </button>
                         <button
@@ -1034,7 +1081,7 @@ const SimuladorV2 = () => {
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >
-                          <div className="font-medium">🎯 Campanha</div>
+                          <div className="font-medium flex items-center gap-1"><IconTarget /> Campanha</div>
                           <div className="text-xs text-gray-500">Parcela Original (cat/200)</div>
                         </button>
                       </div>
@@ -1162,7 +1209,7 @@ const SimuladorV2 = () => {
                 onClick={calcular}
                 className="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
               >
-                Calcular Simulação V2
+                Simular
               </button>
             </div>
 
@@ -1195,7 +1242,7 @@ const SimuladorV2 = () => {
 
                   {/* Parcelas */}
                   <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h3 className="font-semibold text-gray-800 mb-4">💰 Parcelas</h3>
+                    <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><IconMoney /> Parcelas</h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Parcela Integral {resultado.tipo}</span>
@@ -1227,7 +1274,7 @@ const SimuladorV2 = () => {
                   {/* Adesão */}
                   {resultado.valorAdesao > 0 && (
                     <div className="bg-white rounded-2xl shadow-lg p-6">
-                      <h3 className="font-semibold text-gray-800 mb-4">📋 Adesão</h3>
+                      <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><IconClipboard /> Adesão</h3>
                       <div className="space-y-3">
                         <div className="flex justify-between">
                           <span className="text-gray-600">Tipo</span>
@@ -1260,7 +1307,7 @@ const SimuladorV2 = () => {
                   {/* Lance */}
                   {resultado.totalLance > 0 && (
                     <div className="bg-white rounded-2xl shadow-lg p-6">
-                      <h3 className="font-semibold text-gray-800 mb-4">🎯 Lance</h3>
+                      <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><IconTarget /> Lance</h3>
                       <div className="space-y-3">
                         {resultado.recursoProprio > 0 && (
                           <div className="flex justify-between">
@@ -1351,7 +1398,7 @@ const SimuladorV2 = () => {
                       </div>
 
                       <div className="mt-4 text-sm opacity-90 bg-white/10 rounded-lg p-3">
-                        <p className="font-medium mb-1">📊 Alternativa (parcela integral {resultado.tipo}):</p>
+                        <p className="font-medium mb-1 flex items-center gap-1"><IconChart /> Alternativa (parcela integral {resultado.tipo}):</p>
                         {resultado.posContemplacao.alternativa.viavel ? (
                           <p>{formatarMoeda(resultado.posContemplacao.alternativa.parcela)}/mês quita em {resultado.posContemplacao.alternativa.prazo} meses</p>
                         ) : (
@@ -1365,7 +1412,7 @@ const SimuladorV2 = () => {
 
                   {/* Taxas */}
                   <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h3 className="font-semibold text-gray-800 mb-4">📋 Demonstrativo de Taxas</h3>
+                    <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><IconClipboard /> Demonstrativo de Taxas</h3>
                     <div className="space-y-3 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Taxa Administrativa</span>
@@ -1400,13 +1447,10 @@ const SimuladorV2 = () => {
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
-                  <div className="text-6xl mb-4">📊</div>
-                  <h3 className="text-xl font-semibold text-gray-800 mb-2">Simulador V2</h3>
+                  <div className="mb-4 text-emerald-600"><IconCalculator /></div>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">Simulador de Consórcio</h3>
                   <p className="text-gray-600">
-                    Esta versão implementa a lógica do documento com:<br/>
-                    • Piso de 50% na parcela pós-contemplação<br/>
-                    • Taxa de adesão (SEM, À Vista, Diluída)<br/>
-                    • Campanha Parcela Original
+                    Preencha os dados ao lado e clique em "Simular" para ver o resultado.
                   </p>
                 </div>
               )}
