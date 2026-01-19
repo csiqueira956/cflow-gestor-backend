@@ -289,15 +289,15 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-950 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #0a4ee4 0%, #7c3aed 100%)' }}>
+      <div className="bg-white rounded-[20px] w-full max-w-md p-8" style={{ boxShadow: '0 12px 24px rgba(0,0,0,0.1)' }}>
         {/* Logo e título */}
         <div className="flex flex-col items-center mb-8">
-          <Logo className="w-16 h-16 mb-4" showText={false} />
-          <h1 className="text-3xl font-bold text-gray-900 mb-2 font-['Poppins']">
-            Cflow CRM
+          <Logo className="w-16 h-16 mb-4" size={64} showText={false} />
+          <h1 className="text-3xl font-bold mb-2" style={{ background: 'linear-gradient(135deg, #0a4ee4, #7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+            cflow CRM
           </h1>
-          <p className="text-gray-600">
+          <p className="text-accent-500">
             {modoRegistro ? 'Complete seu cadastro para começar' : 'Faça login para continuar'}
           </p>
         </div>
@@ -503,7 +503,11 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg transition-colors font-semibold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full text-white px-6 py-3 rounded-xl transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5"
+            style={{
+              background: 'linear-gradient(135deg, #0a4ee4, #7c3aed)',
+              boxShadow: loading ? 'none' : '0 8px 20px rgba(10,78,228,0.4)'
+            }}
           >
             {loading
               ? (modoRegistro ? 'Cadastrando...' : 'Entrando...')
