@@ -4597,7 +4597,7 @@ app.get('/api/analytics/overview', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar overview:', error);
-    res.status(500).json({ error: 'Erro ao buscar métricas de overview' });
+    res.status(500).json({ error: 'Erro ao buscar métricas de overview', details: error.message });
   }
 });
 
@@ -4629,7 +4629,7 @@ app.get('/api/analytics/mrr', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar MRR:', error);
-    res.status(500).json({ error: 'Erro ao buscar histórico de MRR' });
+    res.status(500).json({ error: 'Erro ao buscar histórico de MRR', details: error.message });
   }
 });
 
@@ -4683,7 +4683,7 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar conversão:', error);
-    res.status(500).json({ error: 'Erro ao buscar taxa de conversão' });
+    res.status(500).json({ error: 'Erro ao buscar taxa de conversão', details: error.message });
   }
 });
 
@@ -4738,7 +4738,7 @@ app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar churn:', error);
-    res.status(500).json({ error: 'Erro ao buscar taxa de churn' });
+    res.status(500).json({ error: 'Erro ao buscar taxa de churn', details: error.message });
   }
 });
 
@@ -4771,7 +4771,7 @@ app.get('/api/analytics/funil', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar funil:', error);
-    res.status(500).json({ error: 'Erro ao buscar funil de vendas' });
+    res.status(500).json({ error: 'Erro ao buscar funil de vendas', details: error.message });
   }
 });
 
