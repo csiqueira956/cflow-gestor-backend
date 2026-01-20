@@ -36,6 +36,8 @@ app.use(cors({
     'https://cflow-website.vercel.app',
     'https://www.cflow.com.br',
     'https://cflow.com.br',
+    'https://www.cflowcrm.com.br',
+    'https://cflowcrm.com.br',
     process.env.FRONTEND_URL
   ].filter(Boolean),
   credentials: true
