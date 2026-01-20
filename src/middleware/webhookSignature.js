@@ -15,9 +15,16 @@ export const validateAsaasWebhook = (req, res, next) => {
   try {
     const webhookToken = process.env.ASAAS_WEBHOOK_TOKEN;
 
-    // Se não houver token configurado, logar aviso e continuar (para desenvolvimento)
+    // Se não houver token configurado, rejeitar em produção (segurança)
     if (!webhookToken) {
-      console.warn('⚠️ ASAAS_WEBHOOK_TOKEN não configurado - validação de webhook desativada');
+      if (process.env.NODE_ENV === 'production') {
+        console.error('🚨 ASAAS_WEBHOOK_TOKEN não configurado em produção - rejeitando webhook');
+        return res.status(500).json({
+          error: 'Configuração inválida',
+          message: 'Webhook não configurado corretamente'
+        });
+      }
+      console.warn('⚠️ ASAAS_WEBHOOK_TOKEN não configurado - permitido apenas em desenvolvimento');
       return next();
     }
 
@@ -62,8 +69,16 @@ export const validateWebhookHMAC = (req, res, next) => {
   try {
     const secret = process.env.ASAAS_WEBHOOK_SECRET;
 
+    // Se não houver secret configurado, rejeitar em produção (segurança)
     if (!secret) {
-      console.warn('⚠️ ASAAS_WEBHOOK_SECRET não configurado');
+      if (process.env.NODE_ENV === 'production') {
+        console.error('🚨 ASAAS_WEBHOOK_SECRET não configurado em produção - rejeitando webhook');
+        return res.status(500).json({
+          error: 'Configuração inválida',
+          message: 'Webhook não configurado corretamente'
+        });
+      }
+      console.warn('⚠️ ASAAS_WEBHOOK_SECRET não configurado - permitido apenas em desenvolvimento');
       return next();
     }
 

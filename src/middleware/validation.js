@@ -28,10 +28,20 @@ export const validateRegister = [
     .withMessage('E-mail inválido'),
 
   body('senha')
-    .isLength({ min: 6 })
-    .withMessage('Senha deve ter no mínimo 6 caracteres')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
-    .withMessage('Senha deve conter pelo menos uma letra maiúscula, uma minúscula e um número'),
+    .isLength({ min: 8 })
+    .withMessage('Senha deve ter no mínimo 8 caracteres')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])/)
+    .withMessage('Senha deve conter: maiúscula, minúscula, número e caractere especial (@$!%*?&#)'),
+
+  body('confirmarSenha')
+    .notEmpty()
+    .withMessage('Confirmação de senha é obrigatória')
+    .custom((value, { req }) => {
+      if (value !== req.body.senha) {
+        throw new Error('As senhas não coincidem');
+      }
+      return true;
+    }),
 
   body('celular')
     .optional()
@@ -159,8 +169,10 @@ export const validateUserUpdate = [
 
   body('senha')
     .optional()
-    .isLength({ min: 6 })
-    .withMessage('Senha deve ter no mínimo 6 caracteres'),
+    .isLength({ min: 8 })
+    .withMessage('Senha deve ter no mínimo 8 caracteres')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])/)
+    .withMessage('Senha deve conter: maiúscula, minúscula, número e caractere especial'),
 
   validate
 ];
@@ -185,8 +197,20 @@ export const validateVendedorRegister = [
     .withMessage('Celular inválido'),
 
   body('senha')
-    .isLength({ min: 6 })
-    .withMessage('Senha deve ter no mínimo 6 caracteres'),
+    .isLength({ min: 8 })
+    .withMessage('Senha deve ter no mínimo 8 caracteres')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])/)
+    .withMessage('Senha deve conter: maiúscula, minúscula, número e caractere especial'),
+
+  body('confirmarSenha')
+    .notEmpty()
+    .withMessage('Confirmação de senha é obrigatória')
+    .custom((value, { req }) => {
+      if (value !== req.body.senha) {
+        throw new Error('As senhas não coincidem');
+      }
+      return true;
+    }),
 
   body('convite_id')
     .notEmpty()
@@ -203,8 +227,20 @@ export const validatePasswordReset = [
     .withMessage('Token é obrigatório'),
 
   body('novaSenha')
-    .isLength({ min: 6 })
-    .withMessage('Senha deve ter no mínimo 6 caracteres'),
+    .isLength({ min: 8 })
+    .withMessage('Senha deve ter no mínimo 8 caracteres')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])/)
+    .withMessage('Senha deve conter: maiúscula, minúscula, número e caractere especial'),
+
+  body('confirmarNovaSenha')
+    .notEmpty()
+    .withMessage('Confirmação de senha é obrigatória')
+    .custom((value, { req }) => {
+      if (value !== req.body.novaSenha) {
+        throw new Error('As senhas não coincidem');
+      }
+      return true;
+    }),
 
   validate
 ];
