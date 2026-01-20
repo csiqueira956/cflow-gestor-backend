@@ -1696,6 +1696,46 @@ app.post('/api/usuarios', async (req, res) => {
   }
 });
 
+// Listar vendedores (DEVE vir ANTES de /api/usuarios/:id)
+app.get('/api/usuarios/vendedores', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    // Super admin pode ver todos os vendedores
+    if (decoded.role === 'super_admin' && !decoded.company_id) {
+      const result = await pool.query(`
+        SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao,
+               u.celular, u.equipe_id, e.nome as equipe_nome, c.nome as empresa_nome, u.created_at
+        FROM usuarios u
+        LEFT JOIN equipes e ON u.equipe_id = e.id
+        LEFT JOIN companies c ON u.company_id = c.id
+        WHERE u.role = 'vendedor'
+        ORDER BY c.nome, u.nome
+      `);
+      return res.json({ data: { vendedores: result.rows } });
+    }
+
+    // Buscar vendedores da mesma empresa
+    const result = await pool.query(`
+      SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao,
+             u.celular, u.equipe_id, e.nome as equipe_nome, u.created_at
+      FROM usuarios u
+      LEFT JOIN equipes e ON u.equipe_id = e.id
+      WHERE u.company_id = $1 AND u.role = 'vendedor'
+      ORDER BY u.nome
+    `, [decoded.company_id]);
+
+    res.json({ data: { vendedores: result.rows } });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao listar vendedores' });
+  }
+});
+
 // Buscar usuário por ID (apenas admin)
 app.get('/api/usuarios/:id', async (req, res) => {
   try {
@@ -1924,46 +1964,6 @@ app.delete('/api/usuarios/:id', async (req, res) => {
   } catch (error) {
     console.error('Erro ao deletar usuário:', error);
     res.status(500).json({ error: 'Erro ao deletar usuário' });
-  }
-});
-
-// Listar vendedores
-app.get('/api/usuarios/vendedores', async (req, res) => {
-  try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ error: 'Token não fornecido' });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
-
-    // Super admin pode ver todos os vendedores
-    if (decoded.role === 'super_admin' && !decoded.company_id) {
-      const result = await pool.query(`
-        SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao,
-               u.celular, u.equipe_id, e.nome as equipe_nome, c.nome as empresa_nome, u.created_at
-        FROM usuarios u
-        LEFT JOIN equipes e ON u.equipe_id = e.id
-        LEFT JOIN companies c ON u.company_id = c.id
-        WHERE u.role = 'vendedor'
-        ORDER BY c.nome, u.nome
-      `);
-      return res.json({ data: { vendedores: result.rows } });
-    }
-
-    // Buscar vendedores da mesma empresa
-    const result = await pool.query(`
-      SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao,
-             u.celular, u.equipe_id, e.nome as equipe_nome, u.created_at
-      FROM usuarios u
-      LEFT JOIN equipes e ON u.equipe_id = e.id
-      WHERE u.company_id = $1 AND u.role = 'vendedor'
-      ORDER BY u.nome
-    `, [decoded.company_id]);
-
-    res.json({ data: { vendedores: result.rows } });
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao listar vendedores' });
   }
 });
 
