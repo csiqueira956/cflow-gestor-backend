@@ -1696,6 +1696,237 @@ app.post('/api/usuarios', async (req, res) => {
   }
 });
 
+// Buscar usuário por ID (apenas admin)
+app.get('/api/usuarios/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    if (decoded.role !== 'admin' && decoded.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores.' });
+    }
+
+    const { id } = req.params;
+    const companyId = decoded.company_id;
+
+    let result;
+    if (decoded.role === 'super_admin' && !companyId) {
+      result = await pool.query(`
+        SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao,
+               u.celular, u.equipe_id, e.nome as equipe_nome, u.created_at
+        FROM usuarios u
+        LEFT JOIN equipes e ON u.equipe_id = e.id
+        WHERE u.id = $1
+      `, [id]);
+    } else {
+      result = await pool.query(`
+        SELECT u.id, u.nome, u.email, u.role, u.tipo_usuario, u.percentual_comissao,
+               u.celular, u.equipe_id, e.nome as equipe_nome, u.created_at
+        FROM usuarios u
+        LEFT JOIN equipes e ON u.equipe_id = e.id
+        WHERE u.id = $1 AND u.company_id = $2
+      `, [id, companyId]);
+    }
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    res.json({ usuario: result.rows[0] });
+  } catch (error) {
+    console.error('Erro ao buscar usuário:', error);
+    res.status(500).json({ error: 'Erro ao buscar usuário' });
+  }
+});
+
+// Atualizar usuário (apenas admin)
+app.put('/api/usuarios/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    if (decoded.role !== 'admin' && decoded.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem atualizar usuários.' });
+    }
+
+    const { id } = req.params;
+    const companyId = decoded.company_id;
+
+    if (!companyId && decoded.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const { nome, email, role, tipo_usuario, percentual_comissao, celular, equipe, equipe_id, senha } = req.body;
+
+    if (!nome || !email) {
+      return res.status(400).json({ error: 'Nome e email são obrigatórios' });
+    }
+
+    // Verificar se o usuário existe e pertence à mesma empresa
+    let checkQuery, checkParams;
+    if (decoded.role === 'super_admin' && !companyId) {
+      checkQuery = 'SELECT id FROM usuarios WHERE id = $1';
+      checkParams = [id];
+    } else {
+      checkQuery = 'SELECT id FROM usuarios WHERE id = $1 AND company_id = $2';
+      checkParams = [id, companyId];
+    }
+
+    const checkResult = await pool.query(checkQuery, checkParams);
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Verificar se o email já existe em outro usuário
+    const emailCheck = await pool.query('SELECT id FROM usuarios WHERE email = $1 AND id != $2', [email, id]);
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'Este email já está cadastrado para outro usuário' });
+    }
+
+    // Construir query de atualização dinamicamente
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (nome !== undefined) {
+      updates.push(`nome = $${paramCount++}`);
+      values.push(nome);
+    }
+    if (email !== undefined) {
+      updates.push(`email = $${paramCount++}`);
+      values.push(email);
+    }
+    if (role !== undefined) {
+      updates.push(`role = $${paramCount++}`);
+      values.push(role);
+    }
+    if (tipo_usuario !== undefined) {
+      updates.push(`tipo_usuario = $${paramCount++}`);
+      values.push(tipo_usuario);
+    }
+    if (percentual_comissao !== undefined) {
+      updates.push(`percentual_comissao = $${paramCount++}`);
+      values.push(percentual_comissao);
+    }
+    if (celular !== undefined) {
+      updates.push(`celular = $${paramCount++}`);
+      values.push(celular);
+    }
+    // Suporte para equipe_id ou equipe (legado)
+    const equipeIdValue = equipe_id !== undefined ? equipe_id : equipe;
+    if (equipeIdValue !== undefined) {
+      updates.push(`equipe_id = $${paramCount++}`);
+      values.push(equipeIdValue ? parseInt(equipeIdValue, 10) : null);
+    }
+
+    // Se uma nova senha foi fornecida, fazer hash
+    if (senha) {
+      const senhaHash = await bcrypt.hash(senha, 10);
+      updates.push(`senha_hash = $${paramCount++}`);
+      values.push(senhaHash);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'Nenhum dado para atualizar' });
+    }
+
+    values.push(id);
+    if (decoded.role !== 'super_admin' || companyId) {
+      values.push(companyId);
+    }
+
+    let updateQuery;
+    if (decoded.role === 'super_admin' && !companyId) {
+      updateQuery = `
+        UPDATE usuarios
+        SET ${updates.join(', ')}
+        WHERE id = $${paramCount}
+        RETURNING id, nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, created_at
+      `;
+    } else {
+      updateQuery = `
+        UPDATE usuarios
+        SET ${updates.join(', ')}
+        WHERE id = $${paramCount} AND company_id = $${paramCount + 1}
+        RETURNING id, nome, email, role, tipo_usuario, percentual_comissao, celular, equipe_id, created_at
+      `;
+    }
+
+    const result = await pool.query(updateQuery, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    res.json({
+      message: 'Usuário atualizado com sucesso',
+      usuario: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar usuário:', error);
+    res.status(500).json({ error: 'Erro ao atualizar usuário' });
+  }
+});
+
+// Deletar usuário (apenas admin)
+app.delete('/api/usuarios/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+
+    if (decoded.role !== 'admin' && decoded.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem deletar usuários.' });
+    }
+
+    const { id } = req.params;
+    const companyId = decoded.company_id;
+
+    if (!companyId && decoded.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    // Verificar se não está tentando deletar a si mesmo
+    if (parseInt(id, 10) === decoded.id) {
+      return res.status(400).json({ error: 'Você não pode deletar sua própria conta' });
+    }
+
+    let deleteQuery, deleteParams;
+    if (decoded.role === 'super_admin' && !companyId) {
+      deleteQuery = 'DELETE FROM usuarios WHERE id = $1 RETURNING id, nome, email';
+      deleteParams = [id];
+    } else {
+      deleteQuery = 'DELETE FROM usuarios WHERE id = $1 AND company_id = $2 RETURNING id, nome, email';
+      deleteParams = [id, companyId];
+    }
+
+    const result = await pool.query(deleteQuery, deleteParams);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    res.json({
+      message: 'Usuário deletado com sucesso',
+      usuario: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Erro ao deletar usuário:', error);
+    res.status(500).json({ error: 'Erro ao deletar usuário' });
+  }
+});
+
 // Listar vendedores
 app.get('/api/usuarios/vendedores', async (req, res) => {
   try {
