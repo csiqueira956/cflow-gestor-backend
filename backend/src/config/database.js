@@ -11,7 +11,7 @@ const { Pool } = pg;
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: process.env.NODE_ENV === 'production'
+    rejectUnauthorized: false // Supabase requer false para conexão SSL
   },
   // Configurações otimizadas para serverless
   max: 1, // Máximo de 1 conexão por função serverless
