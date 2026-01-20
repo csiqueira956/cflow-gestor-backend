@@ -332,24 +332,144 @@ app.post('/api/auth/register', async (req, res) => {
 // Dashboard - Estatísticas gerais
 app.get('/api/dashboard/estatisticas', async (req, res) => {
   try {
-    // Retorna estrutura esperada pelo frontend com valores default
-    const now = new Date();
-    const mesReferencia = now.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const { role, equipe_id, company_id } = decoded;
+    const companyId = company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    // 1. Buscar meta geral do mês atual
+    const mesAtual = new Date().toISOString().slice(0, 7);
+
+    const metaResult = await pool.query(`
+      SELECT COALESCE(SUM(valor_meta), 0) as meta_geral
+      FROM metas WHERE mes_referencia = $1 AND company_id = $2
+    `, [mesAtual, companyId]);
+    const metaGeral = parseFloat(metaResult.rows[0].meta_geral) || 0;
+
+    // 2. Buscar vendas por equipe
+    let vendasPorEquipeQuery, vendasParams;
+
+    if (role === 'vendedor' || role === 'gerente') {
+      vendasPorEquipeQuery = `
+        SELECT e.id as equipe_id, e.nome as equipe_nome,
+          COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_vendido,
+          COUNT(c.id) as total_vendas,
+          COALESCE((SELECT SUM(m.valor_meta) FROM metas m WHERE m.equipe_id = e.id AND m.mes_referencia = $1 AND m.company_id = $3), 0) as meta_equipe
+        FROM equipes e
+        LEFT JOIN usuarios u ON u.equipe_id = e.id
+        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.company_id = $3
+        WHERE e.id = $2 AND e.company_id = $3
+        GROUP BY e.id, e.nome ORDER BY total_vendido DESC
+      `;
+      vendasParams = [mesAtual, equipe_id, companyId];
+    } else {
+      vendasPorEquipeQuery = `
+        SELECT e.id as equipe_id, e.nome as equipe_nome,
+          COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_vendido,
+          COUNT(c.id) as total_vendas,
+          COALESCE((SELECT SUM(m.valor_meta) FROM metas m WHERE m.equipe_id = e.id AND m.mes_referencia = $1 AND m.company_id = $2), 0) as meta_equipe
+        FROM equipes e
+        LEFT JOIN usuarios u ON u.equipe_id = e.id
+        LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.company_id = $2
+        WHERE e.company_id = $2
+        GROUP BY e.id, e.nome ORDER BY total_vendido DESC
+      `;
+      vendasParams = [mesAtual, companyId];
+    }
+
+    const vendasResult = await pool.query(vendasPorEquipeQuery, vendasParams);
+
+    const vendasPorEquipe = vendasResult.rows.map(eq => {
+      const totalVendido = parseFloat(eq.total_vendido) || 0;
+      const metaEquipe = parseFloat(eq.meta_equipe) || 0;
+      return {
+        equipe_id: eq.equipe_id, equipe_nome: eq.equipe_nome,
+        total_vendido: totalVendido, total_vendas: parseInt(eq.total_vendas) || 0,
+        meta_equipe: metaEquipe,
+        percentual_atingido: metaEquipe > 0 ? parseFloat(((totalVendido / metaEquipe) * 100).toFixed(2)) : 0
+      };
+    });
+
+    const totalVendidoGeral = vendasPorEquipe.reduce((acc, eq) => acc + eq.total_vendido, 0);
+    const percentualAtingidoGeral = metaGeral > 0 ? ((totalVendidoGeral / metaGeral) * 100).toFixed(2) : 0;
+
+    // 3. Funil de conversão
+    const funil = await pool.query(`SELECT etapa, COUNT(*) as total FROM clientes WHERE company_id = $1 GROUP BY etapa`, [companyId]);
+    const funnelData = { novo_contato: 0, proposta_enviada: 0, negociacao: 0, fechado: 0, perdido: 0 };
+    funil.rows.forEach(row => { funnelData[row.etapa] = parseInt(row.total); });
+    const totalContatos = Object.values(funnelData).reduce((a, b) => a + b, 0);
+
+    const taxaConversao = {
+      proposta: totalContatos > 0 ? parseFloat(((funnelData.proposta_enviada / totalContatos) * 100).toFixed(2)) : 0,
+      negociacao: totalContatos > 0 ? parseFloat(((funnelData.negociacao / totalContatos) * 100).toFixed(2)) : 0,
+      fechamento: totalContatos > 0 ? parseFloat(((funnelData.fechado / totalContatos) * 100).toFixed(2)) : 0,
+      perda: totalContatos > 0 ? parseFloat(((funnelData.perdido / totalContatos) * 100).toFixed(2)) : 0
+    };
+
+    // 4. Ticket Médio
+    const ticketQuery = await pool.query(`
+      SELECT AVG(CAST(valor_carta AS REAL)) as ticket_medio
+      FROM clientes WHERE etapa = 'fechado' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = $1
+    `, [companyId]);
+    const ticketMedio = parseFloat(ticketQuery.rows[0]?.ticket_medio) || 0;
+
+    // 5. Pipeline Value
+    const pipelineNeg = await pool.query(`SELECT COALESCE(SUM(CAST(valor_carta AS REAL)), 0) as valor, COUNT(*) as qtd FROM clientes WHERE etapa = 'negociacao' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = $1`, [companyId]);
+    const pipelineProp = await pool.query(`SELECT COALESCE(SUM(CAST(valor_carta AS REAL)), 0) as valor, COUNT(*) as qtd FROM clientes WHERE etapa = 'proposta_enviada' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = $1`, [companyId]);
+
+    const pipelineValue = {
+      em_negociacao: parseFloat(pipelineNeg.rows[0]?.valor) || 0,
+      qtd_negociacao: parseInt(pipelineNeg.rows[0]?.qtd) || 0,
+      proposta_enviada: parseFloat(pipelineProp.rows[0]?.valor) || 0,
+      qtd_proposta: parseInt(pipelineProp.rows[0]?.qtd) || 0,
+      total: (parseFloat(pipelineNeg.rows[0]?.valor) || 0) + (parseFloat(pipelineProp.rows[0]?.valor) || 0)
+    };
+
+    // 6. Ranking Vendedores
+    const rankingResult = await pool.query(`
+      SELECT u.id, u.nome, e.nome as equipe_nome, COUNT(c.id) as total_vendas, COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_valor
+      FROM usuarios u LEFT JOIN equipes e ON u.equipe_id = e.id
+      LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.company_id = $1
+      WHERE u.role = 'vendedor' AND u.company_id = $1
+      GROUP BY u.id, u.nome, e.nome ORDER BY total_valor DESC LIMIT 10
+    `, [companyId]);
+
+    const rankingVendedores = rankingResult.rows.map(v => ({
+      id: v.id, nome: v.nome, equipe_nome: v.equipe_nome || '',
+      total_vendas: parseInt(v.total_vendas) || 0, total_valor: parseFloat(v.total_valor) || 0
+    }));
+
+    // 7. Totais
+    const totalClientes = await pool.query('SELECT COUNT(*) as total FROM clientes WHERE company_id = $1', [companyId]);
+    const totalVendas = await pool.query("SELECT COUNT(*) as total FROM clientes WHERE company_id = $1 AND etapa = 'fechado'", [companyId]);
 
     res.json({
       data: {
-        totalClientes: 0,
-        totalLeads: 0,
-        totalVendas: 0,
-        taxaConversao: 0,
-        mes_referencia: mesReferencia,
-        meta_geral: 0,
-        total_vendido_geral: 0,
-        percentual_atingido_geral: 0,
-        vendas_por_equipe: []
+        totalClientes: parseInt(totalClientes.rows[0].total) || 0,
+        totalLeads: parseInt(totalClientes.rows[0].total) || 0,
+        totalVendas: parseInt(totalVendas.rows[0].total) || 0,
+        taxaConversao: taxaConversao.fechamento,
+        mes_referencia: mesAtual,
+        meta_geral: metaGeral,
+        total_vendido_geral: totalVendidoGeral,
+        percentual_atingido_geral: parseFloat(percentualAtingidoGeral),
+        vendas_por_equipe: vendasPorEquipe,
+        taxa_conversao: taxaConversao,
+        ticket_medio: ticketMedio,
+        pipeline_value: pipelineValue,
+        ranking_vendedores: rankingVendedores
       }
     });
   } catch (error) {
+    console.error('Erro ao buscar estatísticas:', error);
     res.status(500).json({ error: 'Erro ao buscar estatísticas' });
   }
 });
@@ -357,19 +477,35 @@ app.get('/api/dashboard/estatisticas', async (req, res) => {
 // Clientes - Estatísticas
 app.get('/api/clientes/estatisticas', async (req, res) => {
   try {
-    // Retorna estrutura esperada pelo frontend: array de estatísticas por etapa
-    res.json({
-      data: {
-        estatisticas: [
-          { etapa: 'novo_contato', total: 0 },
-          { etapa: 'proposta_enviada', total: 0 },
-          { etapa: 'negociacao', total: 0 },
-          { etapa: 'fechado', total: 0 },
-          { etapa: 'perdido', total: 0 }
-        ]
-      }
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Token não fornecido' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const companyId = decoded.company_id;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Empresa não identificada' });
+    }
+
+    const result = await pool.query(`
+      SELECT etapa, COUNT(*) as total
+      FROM clientes
+      WHERE company_id = $1
+      GROUP BY etapa
+    `, [companyId]);
+
+    // Garantir que todas as etapas estejam presentes
+    const etapas = ['novo_contato', 'proposta_enviada', 'negociacao', 'fechado', 'perdido'];
+    const estatisticas = etapas.map(etapa => {
+      const found = result.rows.find(r => r.etapa === etapa);
+      return { etapa, total: found ? parseInt(found.total) : 0 };
     });
+
+    res.json({ data: { estatisticas } });
   } catch (error) {
+    console.error('Erro ao buscar estatísticas:', error);
     res.status(500).json({ error: 'Erro ao buscar estatísticas' });
   }
 });
