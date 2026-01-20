@@ -73,6 +73,6 @@ export const isAdminOrSuperAdmin = (req, res, next) => {
 // Gerar token JWT
 export const generateToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: '7d' // Token expira em 7 dias
+    expiresIn: '24h' // Token expira em 24 horas (segurança)
   });
 };

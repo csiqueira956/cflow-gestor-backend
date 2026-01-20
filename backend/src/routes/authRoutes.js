@@ -28,10 +28,10 @@ router.use(sanitizeInput);
 router.post('/register', createLimiter, validateRegister, register);
 router.post('/login', loginLimiter, validateLogin, login);
 
-// Rotas de recuperação de senha
+// Rotas de recuperação de senha (todas com rate limiting para prevenir brute force)
 router.post('/forgot-password', passwordResetLimiter, validateForgotPassword, requestPasswordReset);
-router.get('/verify-reset-token/:token', verifyResetToken);
-router.post('/reset-password', validatePasswordReset, resetPassword);
+router.get('/verify-reset-token/:token', passwordResetLimiter, verifyResetToken);
+router.post('/reset-password', passwordResetLimiter, validatePasswordReset, resetPassword);
 
 // Rotas protegidas
 router.get('/me', authenticateToken, verificarToken);

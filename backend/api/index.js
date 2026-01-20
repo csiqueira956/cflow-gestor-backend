@@ -5,10 +5,32 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
+import crypto from 'crypto';
 import pool from '../src/config/database.js';
 
 // Configuração de variáveis de ambiente (DEVE ser chamado primeiro)
 dotenv.config();
+
+// SEGURANÇA: Validar JWT_SECRET obrigatório em produção
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
+  console.error('🚨 ERRO CRÍTICO: JWT_SECRET não configurado em produção!');
+  process.exit(1);
+}
+if (!JWT_SECRET) {
+  console.warn('⚠️ JWT_SECRET não configurado - usando valor padrão APENAS para desenvolvimento');
+}
+const getJwtSecret = () => JWT_SECRET || 'dev-secret-only-for-local-testing';
+
+// SEGURANÇA: Função para sanitizar mensagens de erro (não expor detalhes em produção)
+const sanitizeError = (error) => {
+  if (process.env.NODE_ENV === 'production') {
+    // Em produção, log completo mas resposta genérica
+    console.error('Erro interno:', error);
+    return 'Erro interno do servidor';
+  }
+  return error.message;
+};
 
 // Versão da API: 1.0.5 - Estrutura padronizada com wrapper data
 
@@ -76,7 +98,7 @@ app.get('/api/plans', async (_req, res) => {
   } catch (error) {
     res.status(500).json({
       error: 'Erro ao listar planos',
-      message: error.message
+      message: sanitizeError(error)
     });
   }
 });
@@ -125,8 +147,8 @@ app.post('/api/auth/login', async (req, res) => {
         role: usuario.role,
         company_id: usuario.company_id
       },
-      process.env.JWT_SECRET || 'secret-default',
-      { expiresIn: '7d' }
+      getJwtSecret(),
+      { expiresIn: '24h' }
     );
 
     // Registrar sessão de login
@@ -169,7 +191,7 @@ app.post('/api/auth/login', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao realizar login', message: error.message });
+    res.status(500).json({ error: 'Erro ao realizar login', message: sanitizeError(error) });
   }
 });
 
@@ -183,7 +205,7 @@ app.get('/api/auth/me', async (req, res) => {
     }
 
     // Verificar e decodificar token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // Buscar usuário atualizado no banco
     const result = await pool.query(
@@ -204,7 +226,7 @@ app.get('/api/auth/me', async (req, res) => {
         .replace(/[^a-z0-9]/g, '-')
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '')
-        + '-' + Math.random().toString(36).substring(2, 8);
+        + '-' + crypto.randomBytes(8).toString('hex');
 
       await pool.query(
         'UPDATE usuarios SET link_publico = $1 WHERE id = $2',
@@ -263,7 +285,7 @@ app.post('/api/auth/register', async (req, res) => {
         .replace(/[^a-z0-9]/g, '-') // Substitui caracteres especiais por hífen
         .replace(/-+/g, '-') // Remove hífens duplicados
         .replace(/^-|-$/g, '') // Remove hífens no início/fim
-        + '-' + Math.random().toString(36).substring(2, 8); // Adiciona código único
+        + '-' + crypto.randomBytes(8).toString('hex'); // Adiciona código único
 
       // 3. Criar usuário admin
       const userResult = await pool.query(
@@ -300,8 +322,8 @@ app.post('/api/auth/register', async (req, res) => {
           role: usuario.role,
           company_id: usuario.company_id
         },
-        process.env.JWT_SECRET || 'secret-default',
-        { expiresIn: '7d' }
+        getJwtSecret(),
+        { expiresIn: '24h' }
       );
 
 
@@ -321,7 +343,7 @@ app.post('/api/auth/register', async (req, res) => {
       throw error;
     }
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao registrar usuário', message: error.message });
+    res.status(500).json({ error: 'Erro ao registrar usuário', message: sanitizeError(error) });
   }
 });
 
@@ -337,7 +359,7 @@ app.get('/api/dashboard/estatisticas', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { role, equipe_id, company_id } = decoded;
     const companyId = company_id;
 
@@ -478,7 +500,7 @@ app.get('/api/clientes/estatisticas', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     if (!companyId) {
@@ -514,7 +536,7 @@ app.get('/api/subscription/summary', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // Buscar assinatura da empresa com todos os dados do plano
     const result = await pool.query(`
@@ -556,7 +578,7 @@ app.get('/api/subscription/usage', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     // Contar usuários da empresa
@@ -623,7 +645,7 @@ app.post('/api/subscription/trial', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // Verificar se já existe trial
     const existingTrial = await pool.query(
@@ -682,7 +704,7 @@ app.get('/api/grupos', (req, res) => {
     if (!token) {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
-    jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    jwt.verify(token, getJwtSecret());
 
     res.json({
       grupos: [
@@ -760,7 +782,7 @@ app.get('/api/clientes', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { role, id: userId, equipe_id } = decoded;
 
     // Query base com JOIN para pegar dados do vendedor
@@ -808,7 +830,7 @@ app.get('/api/clientes/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { role, id: userId, equipe_id } = decoded;
 
     // Buscar cliente com dados do vendedor
@@ -847,7 +869,7 @@ app.post('/api/clientes', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const clienteData = req.body;
     const telefone = clienteData.telefone_celular || clienteData.telefone || '';
 
@@ -882,7 +904,7 @@ app.put('/api/clientes/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { role, id: userId, equipe_id } = decoded;
     const c = req.body;
 
@@ -1009,7 +1031,7 @@ app.patch('/api/clientes/:id/etapa', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { role, id: userId, equipe_id } = decoded;
 
     // SEGURANÇA: Verificar permissão antes de atualizar etapa
@@ -1054,7 +1076,7 @@ app.delete('/api/clientes/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { role, id: userId, equipe_id } = decoded;
 
     // SEGURANÇA: Verificar permissão antes de deletar
@@ -1102,7 +1124,7 @@ app.get('/api/atividades/cliente/:clienteId', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     const result = await pool.query(`
       SELECT
@@ -1119,7 +1141,7 @@ app.get('/api/atividades/cliente/:clienteId', async (req, res) => {
       data: result.rows
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao listar atividades', message: error.message });
+    res.status(500).json({ error: 'Erro ao listar atividades', message: sanitizeError(error) });
   }
 });
 
@@ -1132,7 +1154,7 @@ app.post('/api/atividades/cliente/:clienteId', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { tipo, titulo, descricao, resultado, proximo_followup, data_atividade } = req.body;
 
     // Validação
@@ -1177,7 +1199,7 @@ app.post('/api/atividades/cliente/:clienteId', async (req, res) => {
       data: result.rows[0]
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao criar atividade', message: error.message });
+    res.status(500).json({ error: 'Erro ao criar atividade', message: sanitizeError(error) });
   }
 });
 
@@ -1190,7 +1212,7 @@ app.put('/api/atividades/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { tipo, titulo, descricao, resultado, proximo_followup, data_atividade } = req.body;
 
     const result = await pool.query(`
@@ -1216,7 +1238,7 @@ app.put('/api/atividades/:id', async (req, res) => {
       data: result.rows[0]
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao atualizar atividade', message: error.message });
+    res.status(500).json({ error: 'Erro ao atualizar atividade', message: sanitizeError(error) });
   }
 });
 
@@ -1229,7 +1251,7 @@ app.delete('/api/atividades/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     const result = await pool.query(
       'DELETE FROM atividades WHERE id = $1 AND company_id = $2 RETURNING *',
@@ -1242,7 +1264,7 @@ app.delete('/api/atividades/:id', async (req, res) => {
 
     res.json({ success: true, message: 'Atividade excluída com sucesso' });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao deletar atividade', message: error.message });
+    res.status(500).json({ error: 'Erro ao deletar atividade', message: sanitizeError(error) });
   }
 });
 
@@ -1254,7 +1276,7 @@ app.get('/api/atividades/followups/proximos', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { dias = 7 } = req.query;
 
     const result = await pool.query(`
@@ -1276,7 +1298,7 @@ app.get('/api/atividades/followups/proximos', async (req, res) => {
 
     res.json({ success: true, data: result.rows });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao listar próximos follow-ups', message: error.message });
+    res.status(500).json({ error: 'Erro ao listar próximos follow-ups', message: sanitizeError(error) });
   }
 });
 
@@ -1288,7 +1310,7 @@ app.get('/api/atividades/followups/atrasados', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     const result = await pool.query(`
       SELECT
@@ -1308,7 +1330,7 @@ app.get('/api/atividades/followups/atrasados', async (req, res) => {
 
     res.json({ success: true, data: result.rows });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao listar follow-ups atrasados', message: error.message });
+    res.status(500).json({ error: 'Erro ao listar follow-ups atrasados', message: sanitizeError(error) });
   }
 });
 
@@ -1324,7 +1346,7 @@ app.get('/api/comissoes', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { role, id: userId, equipe_id } = decoded;
 
     // Query base
@@ -1392,7 +1414,7 @@ app.get('/api/comissoes/estatisticas', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     const result = await pool.query(`
       SELECT
@@ -1420,7 +1442,7 @@ app.get('/api/comissoes/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { role, id: userId, equipe_id } = decoded;
 
     // Buscar comissão
@@ -1472,7 +1494,7 @@ app.post('/api/comissoes', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // SEGURANÇA: Apenas admin pode criar comissões
     if (!['admin', 'super_admin'].includes(decoded.role)) {
@@ -1552,7 +1574,7 @@ app.put('/api/comissoes/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // SEGURANÇA: Apenas admin pode atualizar comissões
     if (!['admin', 'super_admin'].includes(decoded.role)) {
@@ -1641,7 +1663,7 @@ app.put('/api/comissoes/parcelas/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // SEGURANÇA: Apenas admin pode atualizar parcelas
     if (!['admin', 'super_admin'].includes(decoded.role)) {
@@ -1698,7 +1720,7 @@ app.delete('/api/comissoes/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // SEGURANÇA: Apenas admin pode deletar comissões
     if (!['admin', 'super_admin'].includes(decoded.role)) {
@@ -1739,7 +1761,7 @@ app.get('/api/usuarios', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // Buscar usuários (vendedores e gerentes) da mesma empresa
     const result = await pool.query(`
@@ -1765,7 +1787,7 @@ app.post('/api/usuarios', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // Verificar se é admin
     if (decoded.role !== 'admin' && decoded.role !== 'super_admin') {
@@ -1836,7 +1858,7 @@ app.get('/api/usuarios/vendedores', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // Super admin pode ver todos os vendedores
     if (decoded.role === 'super_admin' && !decoded.company_id) {
@@ -1876,7 +1898,7 @@ app.get('/api/usuarios/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     if (decoded.role !== 'admin' && decoded.role !== 'super_admin') {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores.' });
@@ -1923,7 +1945,7 @@ app.put('/api/usuarios/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     if (decoded.role !== 'admin' && decoded.role !== 'super_admin') {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem atualizar usuários.' });
@@ -2056,7 +2078,7 @@ app.delete('/api/usuarios/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     if (decoded.role !== 'admin' && decoded.role !== 'super_admin') {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem deletar usuários.' });
@@ -2110,7 +2132,7 @@ app.get('/api/equipes', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // Super admin pode ver todas as equipes
     if (decoded.role === 'super_admin' && !decoded.company_id) {
@@ -2140,7 +2162,7 @@ app.post('/api/equipes', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { nome, descricao } = req.body;
 
     if (!nome) {
@@ -2165,7 +2187,7 @@ app.put('/api/equipes/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { id } = req.params;
     const { nome, descricao } = req.body;
 
@@ -2196,7 +2218,7 @@ app.delete('/api/equipes/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { id } = req.params;
 
     const result = await pool.query(
@@ -2225,7 +2247,7 @@ app.get('/api/administradoras', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     // Super admin pode ver todas as administradoras
     if (decoded.role === 'super_admin' && !decoded.company_id) {
@@ -2255,7 +2277,7 @@ app.post('/api/administradoras', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { nome, nome_contato, celular, comissionamento_recebido, comissionamento_pago } = req.body;
 
     if (!nome) {
@@ -2281,7 +2303,7 @@ app.put('/api/administradoras/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { id } = req.params;
     const { nome, nome_contato, celular, comissionamento_recebido, comissionamento_pago } = req.body;
 
@@ -2314,7 +2336,7 @@ app.delete('/api/administradoras/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { id } = req.params;
 
     const result = await pool.query(
@@ -2344,7 +2366,7 @@ app.get('/api/metas', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     if (!companyId) {
@@ -2409,7 +2431,7 @@ app.get('/api/metas/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     if (!companyId) {
@@ -2448,7 +2470,7 @@ app.post('/api/metas', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     if (!companyId) {
@@ -2519,7 +2541,7 @@ app.put('/api/metas/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     if (!companyId) {
@@ -2608,7 +2630,7 @@ app.delete('/api/metas/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     if (!companyId) {
@@ -2648,7 +2670,7 @@ const verifySuperAdmin = async (req, res, next) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     if (decoded.role !== 'super_admin') {
       return res.status(403).json({
@@ -2811,7 +2833,7 @@ app.post('/api/admin/assinaturas/criar-empresa', verifySuperAdmin, async (req, r
         .replace(/[^a-z0-9]/g, '-')
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '')
-        + '-' + Math.random().toString(36).substring(2, 8);
+        + '-' + crypto.randomBytes(8).toString('hex');
 
       await pool.query(
         `INSERT INTO usuarios (nome, email, senha_hash, role, company_id, link_publico, created_at)
@@ -2839,7 +2861,7 @@ app.post('/api/admin/assinaturas/criar-empresa', verifySuperAdmin, async (req, r
       throw error;
     }
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao criar empresa', message: error.message });
+    res.status(500).json({ error: 'Erro ao criar empresa', message: sanitizeError(error) });
   }
 });
 
@@ -3409,7 +3431,7 @@ app.post('/api/admin/assinaturas/planos', verifySuperAdmin, async (req, res) => 
     });
 
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao criar plano', message: error.message });
+    res.status(500).json({ error: 'Erro ao criar plano', message: sanitizeError(error) });
   }
 });
 
@@ -3524,7 +3546,7 @@ app.post('/api/admin/empresas/:companyId/usuarios', verifySuperAdmin, async (req
       .replace(/[^a-z0-9]/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '')
-      + '-' + Math.random().toString(36).substring(2, 8);
+      + '-' + crypto.randomBytes(8).toString('hex');
 
     const result = await pool.query(`
       INSERT INTO usuarios (nome, email, senha_hash, role, company_id, link_publico, created_at)
@@ -3579,7 +3601,7 @@ app.post('/api/admin/usuarios/:usuarioId/resetar-senha', verifySuperAdmin, async
     const { novaSenha } = req.body;
 
     // Se não informar nova senha, gera uma aleatória
-    const senha = novaSenha || Math.random().toString(36).substring(2, 10);
+    const senha = novaSenha || crypto.randomBytes(10).toString('hex');
     const senha_hash = await bcrypt.hash(senha, 10);
 
     const result = await pool.query(
@@ -4217,7 +4239,7 @@ app.get('/api/billing/invoices', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     // Buscar asaas_customer_id da empresa
@@ -4272,7 +4294,7 @@ app.get('/api/billing/stats', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     // Buscar asaas_customer_id da empresa
@@ -4352,7 +4374,7 @@ app.get('/api/billing/next', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     // Buscar asaas_customer_id da empresa
@@ -4409,7 +4431,7 @@ app.get('/api/billing/overdue', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     const companyResult = await pool.query(
@@ -4454,7 +4476,7 @@ app.get('/api/billing/upcoming', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
     const days = parseInt(req.query.days) || 7;
 
@@ -4505,7 +4527,7 @@ app.get('/api/billing/dashboard', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const companyId = decoded.company_id;
 
     const companyResult = await pool.query(
@@ -4611,7 +4633,7 @@ app.get('/api/simulador/taxas', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
 
     const result = await pool.query(`
       SELECT
@@ -4638,7 +4660,7 @@ app.post('/api/simulador/taxas', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const {
       administradora_id,
       categoria,
@@ -4721,7 +4743,7 @@ app.delete('/api/simulador/taxas/:id', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { id } = req.params;
 
     const result = await pool.query(
@@ -4748,7 +4770,7 @@ app.post('/api/simulador/calcular', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const { administradora_id, categoria, valor_credito, prazo_meses } = req.body;
 
     if (!valor_credito || !prazo_meses) {
@@ -4867,7 +4889,7 @@ app.post('/api/simulador/criar-lead', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-default');
+    const decoded = jwt.verify(token, getJwtSecret());
     const {
       nome,
       email,
