@@ -33,6 +33,9 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'https://cflow-gestor-frontend.vercel.app',
+    'https://cflow-website.vercel.app',
+    'https://www.cflow.com.br',
+    'https://cflow.com.br',
     process.env.FRONTEND_URL
   ].filter(Boolean),
   credentials: true
@@ -4256,6 +4259,291 @@ app.post('/api/simulador/criar-lead', async (req, res) => {
 });
 
 // ============================================
+// ROTAS DE WEBSITE LEADS (Captação do site público)
+// ============================================
+
+// Rota pública - Receber lead do site
+app.post('/api/leads/website', async (req, res) => {
+  try {
+    const {
+      nome,
+      email,
+      telefone,
+      empresa,
+      tamanho_equipe,
+      mensagem,
+      utm_source,
+      utm_medium,
+      utm_campaign
+    } = req.body;
+
+    // Validação básica
+    if (!nome || !email) {
+      return res.status(400).json({
+        error: 'Nome e email são obrigatórios'
+      });
+    }
+
+    // Capturar IP e User Agent
+    const ip_address = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const user_agent = req.headers['user-agent'];
+
+    const result = await pool.query(
+      `INSERT INTO website_leads
+        (nome, email, telefone, empresa, tamanho_equipe, mensagem,
+         utm_source, utm_medium, utm_campaign, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING id, nome, email, created_at`,
+      [nome, email, telefone, empresa, tamanho_equipe, mensagem,
+       utm_source, utm_medium, utm_campaign, ip_address, user_agent]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Obrigado pelo contato! Em breve entraremos em contato.',
+      lead: {
+        id: result.rows[0].id,
+        nome: result.rows[0].nome
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao criar lead:', error);
+    res.status(500).json({
+      error: 'Erro ao processar sua solicitação. Tente novamente.'
+    });
+  }
+});
+
+// Estatísticas dos leads (Super Admin)
+app.get('/api/leads/website/stats', verifySuperAdmin, async (req, res) => {
+  try {
+    const statsQuery = `
+      SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status = 'novo') as novos,
+        COUNT(*) FILTER (WHERE status = 'em_analise') as em_analise,
+        COUNT(*) FILTER (WHERE status = 'contatado') as contatados,
+        COUNT(*) FILTER (WHERE status = 'convertido') as convertidos,
+        COUNT(*) FILTER (WHERE status = 'descartado') as descartados,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as ultimos_7_dias,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') as ultimos_30_dias
+      FROM website_leads
+    `;
+
+    const result = await pool.query(statsQuery);
+
+    res.json({
+      stats: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar estatísticas:', error);
+    res.status(500).json({ error: 'Erro ao buscar estatísticas' });
+  }
+});
+
+// Listar todos os leads (Super Admin)
+app.get('/api/leads/website', verifySuperAdmin, async (req, res) => {
+  try {
+    const {
+      status,
+      page = 1,
+      limit = 20,
+      busca,
+      ordenar = 'created_at',
+      direcao = 'DESC'
+    } = req.query;
+
+    const offset = (page - 1) * limit;
+
+    // Construir query dinamicamente
+    let whereClause = '';
+    const params = [];
+    let paramIndex = 1;
+
+    if (status) {
+      whereClause += ` WHERE status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+
+    if (busca) {
+      const buscaCondition = status ? ' AND' : ' WHERE';
+      whereClause += `${buscaCondition} (nome ILIKE $${paramIndex} OR email ILIKE $${paramIndex} OR empresa ILIKE $${paramIndex})`;
+      params.push(`%${busca}%`);
+      paramIndex++;
+    }
+
+    // Ordenação segura (whitelist)
+    const ordenacaoPermitida = ['created_at', 'nome', 'email', 'status', 'empresa'];
+    const direcaoPermitida = ['ASC', 'DESC'];
+    const ordenarFinal = ordenacaoPermitida.includes(ordenar) ? ordenar : 'created_at';
+    const direcaoFinal = direcaoPermitida.includes(direcao.toUpperCase()) ? direcao.toUpperCase() : 'DESC';
+
+    // Query principal
+    const leadsQuery = `
+      SELECT
+        wl.*,
+        u.nome as vendedor_nome,
+        c.nome as empresa_nome
+      FROM website_leads wl
+      LEFT JOIN usuarios u ON wl.atribuido_a_vendedor_id = u.id
+      LEFT JOIN companies c ON wl.atribuido_a_empresa_id = c.id
+      ${whereClause}
+      ORDER BY ${ordenarFinal} ${direcaoFinal}
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    params.push(limit, offset);
+
+    // Query de contagem
+    const countQuery = `SELECT COUNT(*) FROM website_leads ${whereClause}`;
+    const countParams = params.slice(0, -2); // Remove limit e offset
+
+    const [leadsResult, countResult] = await Promise.all([
+      pool.query(leadsQuery, params),
+      pool.query(countQuery, countParams)
+    ]);
+
+    const total = parseInt(countResult.rows[0].count);
+
+    res.json({
+      leads: leadsResult.rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao listar leads:', error);
+    res.status(500).json({ error: 'Erro ao buscar leads' });
+  }
+});
+
+// Obter detalhes de um lead (Super Admin)
+app.get('/api/leads/website/:id', verifySuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT
+        wl.*,
+        u.nome as vendedor_nome,
+        c.nome as empresa_nome
+       FROM website_leads wl
+       LEFT JOIN usuarios u ON wl.atribuido_a_vendedor_id = u.id
+       LEFT JOIN companies c ON wl.atribuido_a_empresa_id = c.id
+       WHERE wl.id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+
+    res.json({ lead: result.rows[0] });
+
+  } catch (error) {
+    console.error('Erro ao buscar lead:', error);
+    res.status(500).json({ error: 'Erro ao buscar lead' });
+  }
+});
+
+// Atualizar status do lead (Super Admin)
+app.patch('/api/leads/website/:id/status', verifySuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, notas } = req.body;
+
+    const statusPermitidos = ['novo', 'em_analise', 'contatado', 'convertido', 'descartado'];
+    if (!statusPermitidos.includes(status)) {
+      return res.status(400).json({
+        error: 'Status inválido',
+        statusPermitidos
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE website_leads
+       SET status = $1, notas = COALESCE($2, notas)
+       WHERE id = $3
+       RETURNING *`,
+      [status, notas, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+
+    res.json({
+      message: 'Status atualizado com sucesso',
+      lead: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Erro ao atualizar lead:', error);
+    res.status(500).json({ error: 'Erro ao atualizar lead' });
+  }
+});
+
+// Atribuir lead a um vendedor/empresa (Super Admin)
+app.patch('/api/leads/website/:id/atribuir', verifySuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { vendedor_id, empresa_id } = req.body;
+
+    const result = await pool.query(
+      `UPDATE website_leads
+       SET
+         atribuido_a_vendedor_id = $1,
+         atribuido_a_empresa_id = $2,
+         status = CASE WHEN status = 'novo' THEN 'em_analise' ELSE status END
+       WHERE id = $3
+       RETURNING *`,
+      [vendedor_id, empresa_id, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+
+    res.json({
+      message: 'Lead atribuído com sucesso',
+      lead: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Erro ao atribuir lead:', error);
+    res.status(500).json({ error: 'Erro ao atribuir lead' });
+  }
+});
+
+// Deletar lead (Super Admin)
+app.delete('/api/leads/website/:id', verifySuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM website_leads WHERE id = $1 RETURNING id',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+
+    res.json({ message: 'Lead excluído com sucesso' });
+
+  } catch (error) {
+    console.error('Erro ao deletar lead:', error);
+    res.status(500).json({ error: 'Erro ao deletar lead' });
+  }
+});
+
+// ============================================
 // ANALYTICS (SUPER ADMIN)
 // ============================================
 
@@ -4265,22 +4553,24 @@ app.get('/api/analytics/overview', verifySuperAdmin, async (req, res) => {
     // Total de empresas
     const totalEmpresas = await pool.query('SELECT COUNT(*) FROM companies');
 
-    // Empresas ativas (status = active)
-    const empresasAtivas = await pool.query(
-      "SELECT COUNT(*) FROM companies WHERE subscription_status = 'active'"
-    );
+    // Empresas com assinatura ativa (via subscriptions)
+    const empresasAtivas = await pool.query(`
+      SELECT COUNT(DISTINCT s.company_id) FROM subscriptions s
+      WHERE s.status = 'active'
+    `);
 
     // Empresas em trial
-    const empresasTrial = await pool.query(
-      "SELECT COUNT(*) FROM companies WHERE subscription_status = 'trial'"
-    );
+    const empresasTrial = await pool.query(`
+      SELECT COUNT(DISTINCT s.company_id) FROM subscriptions s
+      WHERE s.status = 'trialing'
+    `);
 
     // Receita mensal (MRR) estimada
     const mrr = await pool.query(`
       SELECT COALESCE(SUM(p.price), 0) as mrr
-      FROM companies c
-      JOIN plans p ON c.plan_id = p.id
-      WHERE c.subscription_status = 'active'
+      FROM subscriptions s
+      JOIN plans p ON s.plan_id = p.id
+      WHERE s.status = 'active'
     `);
 
     // Novos clientes no mês
@@ -4291,9 +4581,9 @@ app.get('/api/analytics/overview', verifySuperAdmin, async (req, res) => {
 
     // Churn do mês (cancelamentos)
     const churnNoMes = await pool.query(`
-      SELECT COUNT(*) FROM companies
-      WHERE subscription_status IN ('cancelled', 'expired')
-      AND DATE_TRUNC('month', updated_at) = DATE_TRUNC('month', CURRENT_DATE)
+      SELECT COUNT(DISTINCT s.company_id) FROM subscriptions s
+      WHERE s.status IN ('cancelled', 'expired')
+      AND DATE_TRUNC('month', s.updated_at) = DATE_TRUNC('month', CURRENT_DATE)
     `);
 
     res.json({
@@ -4309,7 +4599,7 @@ app.get('/api/analytics/overview', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar overview:', error);
-    res.status(500).json({ error: 'Erro ao buscar métricas de overview' });
+    res.status(500).json({ error: 'Erro ao buscar métricas de overview', details: error.message });
   }
 });
 
@@ -4317,31 +4607,20 @@ app.get('/api/analytics/overview', verifySuperAdmin, async (req, res) => {
 app.get('/api/analytics/mrr', verifySuperAdmin, async (req, res) => {
   try {
     const periodo = parseInt(req.query.periodo) || 12;
+    const dataInicio = new Date();
+    dataInicio.setMonth(dataInicio.getMonth() - periodo);
 
     const result = await pool.query(`
-      WITH meses AS (
-        SELECT generate_series(
-          DATE_TRUNC('month', CURRENT_DATE - make_interval(months => $1)),
-          DATE_TRUNC('month', CURRENT_DATE),
-          '1 month'::interval
-        ) AS mes
-      ),
-      mrr_por_mes AS (
-        SELECT
-          DATE_TRUNC('month', c.created_at) as mes,
-          COALESCE(SUM(p.price), 0) as mrr
-        FROM companies c
-        LEFT JOIN plans p ON c.plan_id = p.id
-        WHERE c.subscription_status IN ('active', 'trial')
-        GROUP BY DATE_TRUNC('month', c.created_at)
-      )
       SELECT
-        TO_CHAR(m.mes, 'YYYY-MM') as mes,
-        COALESCE(mrr.mrr, 0) as mrr
-      FROM meses m
-      LEFT JOIN mrr_por_mes mrr ON m.mes = mrr.mes
-      ORDER BY m.mes
-    `, [periodo]);
+        TO_CHAR(DATE_TRUNC('month', s.created_at), 'YYYY-MM') as mes,
+        COALESCE(SUM(p.price), 0) as mrr
+      FROM subscriptions s
+      JOIN plans p ON s.plan_id = p.id
+      WHERE s.status IN ('active', 'trialing')
+        AND s.created_at >= $1
+      GROUP BY DATE_TRUNC('month', s.created_at)
+      ORDER BY DATE_TRUNC('month', s.created_at)
+    `, [dataInicio]);
 
     res.json({
       success: true,
@@ -4352,7 +4631,7 @@ app.get('/api/analytics/mrr', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar MRR:', error);
-    res.status(500).json({ error: 'Erro ao buscar histórico de MRR' });
+    res.status(500).json({ error: 'Erro ao buscar histórico de MRR', details: error.message });
   }
 });
 
@@ -4360,32 +4639,29 @@ app.get('/api/analytics/mrr', verifySuperAdmin, async (req, res) => {
 app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
   try {
     const periodo = parseInt(req.query.periodo) || 12;
+    const dataInicio = new Date();
+    dataInicio.setMonth(dataInicio.getMonth() - periodo);
 
     const result = await pool.query(`
-      WITH meses AS (
-        SELECT generate_series(
-          DATE_TRUNC('month', CURRENT_DATE - make_interval(months => $1)),
-          DATE_TRUNC('month', CURRENT_DATE),
-          '1 month'::interval
-        ) AS mes
-      ),
-      trials_por_mes AS (
+      WITH trials_por_mes AS (
         SELECT
           DATE_TRUNC('month', created_at) as mes,
           COUNT(*) as total_trials
-        FROM companies
+        FROM subscriptions
+        WHERE created_at >= $1
         GROUP BY DATE_TRUNC('month', created_at)
       ),
       conversoes_por_mes AS (
         SELECT
           DATE_TRUNC('month', created_at) as mes,
           COUNT(*) as conversoes
-        FROM companies
-        WHERE subscription_status = 'active'
+        FROM subscriptions
+        WHERE status = 'active'
+          AND created_at >= $1
         GROUP BY DATE_TRUNC('month', created_at)
       )
       SELECT
-        TO_CHAR(m.mes, 'YYYY-MM') as mes,
+        TO_CHAR(t.mes, 'YYYY-MM') as mes,
         COALESCE(t.total_trials, 0) as trials,
         COALESCE(c.conversoes, 0) as conversoes,
         CASE
@@ -4393,11 +4669,10 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
           THEN ROUND((COALESCE(c.conversoes, 0)::numeric / t.total_trials::numeric) * 100, 2)
           ELSE 0
         END as taxa_conversao
-      FROM meses m
-      LEFT JOIN trials_por_mes t ON m.mes = t.mes
-      LEFT JOIN conversoes_por_mes c ON m.mes = c.mes
-      ORDER BY m.mes
-    `, [periodo]);
+      FROM trials_por_mes t
+      LEFT JOIN conversoes_por_mes c ON t.mes = c.mes
+      ORDER BY t.mes
+    `, [dataInicio]);
 
     res.json({
       success: true,
@@ -4410,7 +4685,7 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar conversão:', error);
-    res.status(500).json({ error: 'Erro ao buscar taxa de conversão' });
+    res.status(500).json({ error: 'Erro ao buscar taxa de conversão', details: error.message });
   }
 });
 
@@ -4418,33 +4693,30 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
 app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
   try {
     const periodo = parseInt(req.query.periodo) || 12;
+    const dataInicio = new Date();
+    dataInicio.setMonth(dataInicio.getMonth() - periodo);
 
     const result = await pool.query(`
-      WITH meses AS (
-        SELECT generate_series(
-          DATE_TRUNC('month', CURRENT_DATE - make_interval(months => $1)),
-          DATE_TRUNC('month', CURRENT_DATE),
-          '1 month'::interval
-        ) AS mes
-      ),
-      ativos_por_mes AS (
+      WITH ativos_por_mes AS (
         SELECT
           DATE_TRUNC('month', created_at) as mes,
           COUNT(*) as total_ativos
-        FROM companies
-        WHERE subscription_status IN ('active', 'trial')
+        FROM subscriptions
+        WHERE status IN ('active', 'trialing')
+          AND created_at >= $1
         GROUP BY DATE_TRUNC('month', created_at)
       ),
       cancelados_por_mes AS (
         SELECT
           DATE_TRUNC('month', updated_at) as mes,
           COUNT(*) as cancelados
-        FROM companies
-        WHERE subscription_status IN ('cancelled', 'expired')
+        FROM subscriptions
+        WHERE status IN ('cancelled', 'expired')
+          AND updated_at >= $1
         GROUP BY DATE_TRUNC('month', updated_at)
       )
       SELECT
-        TO_CHAR(m.mes, 'YYYY-MM') as mes,
+        TO_CHAR(COALESCE(a.mes, c.mes), 'YYYY-MM') as mes,
         COALESCE(a.total_ativos, 0) as ativos,
         COALESCE(c.cancelados, 0) as cancelados,
         CASE
@@ -4452,11 +4724,10 @@ app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
           THEN ROUND((COALESCE(c.cancelados, 0)::numeric / a.total_ativos::numeric) * 100, 2)
           ELSE 0
         END as taxa_churn
-      FROM meses m
-      LEFT JOIN ativos_por_mes a ON m.mes = a.mes
-      LEFT JOIN cancelados_por_mes c ON m.mes = c.mes
-      ORDER BY m.mes
-    `, [periodo]);
+      FROM ativos_por_mes a
+      FULL OUTER JOIN cancelados_por_mes c ON a.mes = c.mes
+      ORDER BY COALESCE(a.mes, c.mes)
+    `, [dataInicio]);
 
     res.json({
       success: true,
@@ -4469,7 +4740,7 @@ app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar churn:', error);
-    res.status(500).json({ error: 'Erro ao buscar taxa de churn' });
+    res.status(500).json({ error: 'Erro ao buscar taxa de churn', details: error.message });
   }
 });
 
@@ -4478,18 +4749,19 @@ app.get('/api/analytics/funil', verifySuperAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
-        subscription_status as status,
+        status,
         COUNT(*) as quantidade
-      FROM companies
-      GROUP BY subscription_status
+      FROM subscriptions
+      GROUP BY status
       ORDER BY
-        CASE subscription_status
-          WHEN 'trial' THEN 1
+        CASE status
+          WHEN 'trialing' THEN 1
           WHEN 'active' THEN 2
-          WHEN 'suspended' THEN 3
+          WHEN 'past_due' THEN 3
           WHEN 'cancelled' THEN 4
           WHEN 'expired' THEN 5
-          ELSE 6
+          WHEN 'pending' THEN 6
+          ELSE 7
         END
     `);
 
@@ -4502,7 +4774,7 @@ app.get('/api/analytics/funil', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar funil:', error);
-    res.status(500).json({ error: 'Erro ao buscar funil de vendas' });
+    res.status(500).json({ error: 'Erro ao buscar funil de vendas', details: error.message });
   }
 });
 
@@ -4513,46 +4785,44 @@ app.get('/api/analytics/funil', verifySuperAdmin, async (req, res) => {
 // Listar logs de webhook
 app.get('/api/webhooks/logs', verifySuperAdmin, async (req, res) => {
   try {
-    const { limit = 100, offset = 0, status, event_type } = req.query;
+    const { limit = 100, offset = 0, processed, event_type } = req.query;
 
     let query = `
-      SELECT
-        we.*,
-        c.nome as empresa_nome
-      FROM webhook_events we
-      LEFT JOIN companies c ON we.company_id = c.id
+      SELECT *
+      FROM webhook_events
       WHERE 1=1
     `;
     const params = [];
 
-    if (status && status !== 'all') {
-      params.push(status);
-      query += ` AND we.status = $${params.length}`;
+    // Filter by processed status (boolean)
+    if (processed !== undefined && processed !== 'all') {
+      params.push(processed === 'true');
+      query += ` AND processed = $${params.length}`;
     }
 
     if (event_type && event_type !== 'all') {
       params.push(event_type);
-      query += ` AND we.event_type = $${params.length}`;
+      query += ` AND event_type = $${params.length}`;
     }
 
     params.push(parseInt(limit));
     params.push(parseInt(offset));
-    query += ` ORDER BY we.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    query += ` ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
     const result = await pool.query(query, params);
 
     // Contar total
-    let countQuery = `SELECT COUNT(*) FROM webhook_events we WHERE 1=1`;
+    let countQuery = `SELECT COUNT(*) FROM webhook_events WHERE 1=1`;
     const countParams = [];
 
-    if (status && status !== 'all') {
-      countParams.push(status);
-      countQuery += ` AND we.status = $${countParams.length}`;
+    if (processed !== undefined && processed !== 'all') {
+      countParams.push(processed === 'true');
+      countQuery += ` AND processed = $${countParams.length}`;
     }
 
     if (event_type && event_type !== 'all') {
       countParams.push(event_type);
-      countQuery += ` AND we.event_type = $${countParams.length}`;
+      countQuery += ` AND event_type = $${countParams.length}`;
     }
 
     const countResult = await pool.query(countQuery, countParams);
@@ -4568,7 +4838,7 @@ app.get('/api/webhooks/logs', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar webhook logs:', error);
-    res.status(500).json({ error: 'Erro ao buscar logs de webhook' });
+    res.status(500).json({ error: 'Erro ao buscar logs de webhook', details: error.message });
   }
 });
 
@@ -4587,28 +4857,24 @@ app.post('/api/webhooks/reprocess/:id', verifySuperAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Evento não encontrado' });
     }
 
-    const evento = eventResult.rows[0];
-
-    // Atualizar status para processing
+    // Marcar como processado e incrementar retry_count
     await pool.query(
-      "UPDATE webhook_events SET status = 'processing', updated_at = NOW() WHERE id = $1",
-      [id]
-    );
-
-    // Aqui você pode adicionar a lógica de reprocessamento específica
-    // Por enquanto, apenas marca como reprocessado
-    await pool.query(
-      "UPDATE webhook_events SET status = 'processed', processed_at = NOW(), updated_at = NOW() WHERE id = $1",
+      `UPDATE webhook_events
+       SET processed = true,
+           processed_at = NOW(),
+           retry_count = retry_count + 1,
+           error_message = NULL
+       WHERE id = $1`,
       [id]
     );
 
     res.json({
       success: true,
-      message: 'Webhook marcado para reprocessamento'
+      message: 'Webhook marcado como reprocessado'
     });
   } catch (error) {
     console.error('Erro ao reprocessar webhook:', error);
-    res.status(500).json({ error: 'Erro ao reprocessar webhook' });
+    res.status(500).json({ error: 'Erro ao reprocessar webhook', details: error.message });
   }
 });
 
