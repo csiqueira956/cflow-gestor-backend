@@ -3,6 +3,7 @@ import Usuario from '../models/Usuario.js';
 import { generateToken } from '../middleware/auth.js';
 import pool from '../config/database.js';
 import { registerSession, registerLogout } from './sessionController.js';
+import { logAudit, AuditAction, getClientInfo } from '../services/auditService.js';
 
 // Registro de novo usuário
 // SEGURANÇA: Esta rota é pública - role é sempre 'vendedor'
@@ -55,6 +56,8 @@ export const register = async (req, res) => {
 
 // Login de usuário
 export const login = async (req, res) => {
+  const { ipAddress, userAgent } = getClientInfo(req);
+
   try {
     const { email, senha } = req.body;
 
@@ -66,30 +69,64 @@ export const login = async (req, res) => {
     // Buscar usuário
     const usuario = await Usuario.findByEmail(email);
     if (!usuario) {
+      // Audit: tentativa de login com email não existente
+      await logAudit({
+        action: AuditAction.LOGIN_FAILED,
+        details: { email, reason: 'email_not_found' },
+        ipAddress,
+        userAgent
+      });
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     // Verificar senha
     const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
     if (!senhaValida) {
+      // Audit: tentativa de login com senha incorreta
+      await logAudit({
+        userId: usuario.id,
+        companyId: usuario.company_id,
+        action: AuditAction.LOGIN_FAILED,
+        details: { reason: 'invalid_password' },
+        ipAddress,
+        userAgent
+      });
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     // Buscar dados completos do usuário com equipe
     const usuarioCompleto = await Usuario.findById(usuario.id);
 
-    // Gerar token JWT
+    // Buscar token_version atual
+    const versionResult = await pool.query(
+      'SELECT token_version FROM usuarios WHERE id = $1',
+      [usuario.id]
+    );
+    const tokenVersion = versionResult.rows[0]?.token_version || 0;
+
+    // Gerar token JWT com token_version
     const token = generateToken({
       id: usuario.id,
       email: usuario.email,
       role: usuario.role,
-      equipe_id: usuario.equipe_id
+      company_id: usuario.company_id,
+      equipe_id: usuario.equipe_id,
+      token_version: tokenVersion
     });
 
     // Registrar sessão de login
-    const ipAddress = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'];
-    const userAgent = req.headers['user-agent'];
     await registerSession(usuario.id, usuario.company_id, ipAddress, userAgent);
+
+    // Audit: login bem sucedido
+    await logAudit({
+      userId: usuario.id,
+      companyId: usuario.company_id,
+      action: AuditAction.LOGIN,
+      entityType: 'user',
+      entityId: usuario.id.toString(),
+      ipAddress,
+      userAgent
+    });
 
     res.json({
       message: 'Login realizado com sucesso',
@@ -114,7 +151,21 @@ export const login = async (req, res) => {
 // Logout de usuário
 export const logout = async (req, res) => {
   try {
+    const { ipAddress, userAgent } = getClientInfo(req);
+
     await registerLogout(req.user.id);
+
+    // Audit: logout
+    await logAudit({
+      userId: req.user.id,
+      companyId: req.user.company_id,
+      action: AuditAction.LOGOUT,
+      entityType: 'user',
+      entityId: req.user.id.toString(),
+      ipAddress,
+      userAgent
+    });
+
     res.json({ message: 'Logout realizado com sucesso' });
   } catch (error) {
     console.error('Erro ao fazer logout:', error);
@@ -251,6 +302,8 @@ export const verifyResetToken = async (req, res) => {
 
 // Resetar senha
 export const resetPassword = async (req, res) => {
+  const { ipAddress, userAgent } = getClientInfo(req);
+
   try {
     const { token, novaSenha } = req.body;
 
@@ -258,8 +311,8 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ error: 'Token e nova senha são obrigatórios' });
     }
 
-    if (novaSenha.length < 6) {
-      return res.status(400).json({ error: 'Senha deve ter no mínimo 6 caracteres' });
+    if (novaSenha.length < 8) {
+      return res.status(400).json({ error: 'Senha deve ter no mínimo 8 caracteres' });
     }
 
     const PasswordReset = (await import('../models/PasswordReset.js')).default;
@@ -274,12 +327,23 @@ export const resetPassword = async (req, res) => {
     // Hash da nova senha
     const senha_hash = await bcrypt.hash(novaSenha, 10);
 
-    // Atualizar senha do usuário
-    const query = 'UPDATE usuarios SET senha_hash = $1 WHERE id = $2';
+    // Atualizar senha e incrementar token_version para invalidar sessões antigas
+    const query = 'UPDATE usuarios SET senha_hash = $1, token_version = COALESCE(token_version, 0) + 1 WHERE id = $2';
     await pool.query(query, [senha_hash, resetData.user_id]);
 
     // Marcar token como usado
     await PasswordReset.markAsUsed(token);
+
+    // Audit: reset de senha
+    await logAudit({
+      userId: resetData.user_id,
+      action: AuditAction.PASSWORD_RESET,
+      entityType: 'user',
+      entityId: resetData.user_id.toString(),
+      details: { method: 'reset_link' },
+      ipAddress,
+      userAgent
+    });
 
     res.json({ message: 'Senha alterada com sucesso! Você já pode fazer login.' });
   } catch (error) {

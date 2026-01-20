@@ -5,7 +5,7 @@ import pool from '../config/database.js';
 dotenv.config();
 
 // Middleware para verificar autenticação JWT
-export const authenticateToken = (req, res, next) => {
+export const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
@@ -15,7 +15,30 @@ export const authenticateToken = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // { id, email, role }
+
+    // Verificar token_version para invalidar sessões antigas
+    const userResult = await pool.query(
+      'SELECT token_version, ativo FROM usuarios WHERE id = $1',
+      [decoded.id]
+    );
+
+    if (!userResult.rows[0]) {
+      return res.status(401).json({ error: 'Usuário não encontrado' });
+    }
+
+    if (!userResult.rows[0].ativo) {
+      return res.status(401).json({ error: 'Usuário desativado' });
+    }
+
+    // Se token_version no token não corresponder ao do banco, sessão foi invalidada
+    const currentVersion = userResult.rows[0].token_version || 0;
+    const tokenVersion = decoded.token_version || 0;
+
+    if (tokenVersion < currentVersion) {
+      return res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
+    }
+
+    req.user = decoded; // { id, email, role, company_id, token_version }
 
     // Atualizar última atividade (async, não bloqueia a request)
     updateUserActivity(decoded.id).catch(() => {});
@@ -70,9 +93,15 @@ export const isAdminOrSuperAdmin = (req, res, next) => {
   next();
 };
 
-// Gerar token JWT
+// Gerar token JWT (inclui token_version para invalidação de sessões)
 export const generateToken = (payload) => {
-  return jwt.sign(payload, process.env.JWT_SECRET, {
+  // Garantir que token_version está incluído
+  const tokenPayload = {
+    ...payload,
+    token_version: payload.token_version || 0
+  };
+
+  return jwt.sign(tokenPayload, process.env.JWT_SECRET, {
     expiresIn: '24h' // Token expira em 24 horas (segurança)
   });
 };

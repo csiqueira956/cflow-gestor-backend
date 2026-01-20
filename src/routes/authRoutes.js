@@ -2,13 +2,15 @@ import express from 'express';
 import {
   register,
   login,
+  logout,
   verificarToken,
   updateProfile,
   requestPasswordReset,
   verifyResetToken,
   resetPassword
 } from '../controllers/authController.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { logoutAllSessions, forceLogoutUser } from '../controllers/sessionController.js';
+import { authenticateToken, isAdmin } from '../middleware/auth.js';
 import { loginLimiter, createLimiter, passwordResetLimiter } from '../middleware/rateLimiter.js';
 import {
   validateRegister,
@@ -36,5 +38,8 @@ router.post('/reset-password', passwordResetLimiter, validatePasswordReset, rese
 // Rotas protegidas
 router.get('/me', authenticateToken, verificarToken);
 router.put('/me', authenticateToken, validateProfileUpdate, updateProfile);
+router.post('/logout', authenticateToken, logout);
+router.post('/logout-all', authenticateToken, logoutAllSessions);
+router.post('/force-logout/:userId', authenticateToken, isAdmin, forceLogoutUser);
 
 export default router;

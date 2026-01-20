@@ -18,6 +18,7 @@ import webhookRoutes from './routes/webhookRoutes.js';
 import adminAssinaturaRoutes from './routes/adminAssinaturaRoutes.js';
 import atividadeRoutes from './routes/atividadeRoutes.js';
 import websiteLeadsRoutes from './routes/websiteLeadsRoutes.js';
+import auditRoutes from './routes/auditRoutes.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import { authenticateToken } from './middleware/auth.js';
 
@@ -77,6 +78,9 @@ app.use('/api/webhooks', webhookRoutes); // Webhooks do gateway (sem auth)
 
 // Rotas de Super Admin (gerenciamento de empresas/assinaturas)
 app.use('/api/admin', adminAssinaturaRoutes);
+
+// Rotas de Auditoria
+app.use('/api/audit', auditRoutes);
 
 // Rotas de Leads do Website (público + super admin)
 app.use('/api/leads/website', websiteLeadsRoutes);

@@ -60,6 +60,79 @@ export const registerLogout = async (userId) => {
   }
 };
 
+// Logout de todas as sessões (invalida todos os tokens)
+export const logoutAllSessions = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Incrementar token_version para invalidar todos os tokens existentes
+    await pool.query(
+      `UPDATE usuarios SET token_version = COALESCE(token_version, 0) + 1 WHERE id = $1`,
+      [userId]
+    );
+
+    // Desativar todas as sessões
+    const result = await pool.query(
+      `UPDATE user_sessions SET is_active = false, logout_at = NOW() WHERE user_id = $1 AND is_active = true RETURNING id`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Todas as sessões foram encerradas',
+      sessions_closed: result.rowCount
+    });
+  } catch (error) {
+    console.error('Erro ao fazer logout de todas as sessões:', error);
+    res.status(500).json({ error: 'Erro ao encerrar sessões' });
+  }
+};
+
+// Forçar logout de um usuário específico (apenas admin/super_admin)
+export const forceLogoutUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const requesterId = req.user.id;
+
+    // Não pode forçar logout de si mesmo
+    if (parseInt(userId) === requesterId) {
+      return res.status(400).json({ error: 'Use a rota de logout normal para encerrar sua própria sessão' });
+    }
+
+    // Verificar se o usuário alvo pertence à mesma empresa (se não for super_admin)
+    if (req.user.role !== 'super_admin') {
+      const userCheck = await pool.query(
+        'SELECT company_id FROM usuarios WHERE id = $1',
+        [userId]
+      );
+
+      if (!userCheck.rows[0] || userCheck.rows[0].company_id !== req.user.company_id) {
+        return res.status(403).json({ error: 'Sem permissão para encerrar sessões deste usuário' });
+      }
+    }
+
+    // Incrementar token_version e desativar sessões
+    await pool.query(
+      `UPDATE usuarios SET token_version = COALESCE(token_version, 0) + 1 WHERE id = $1`,
+      [userId]
+    );
+
+    const result = await pool.query(
+      `UPDATE user_sessions SET is_active = false, logout_at = NOW() WHERE user_id = $1 AND is_active = true RETURNING id`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Sessões do usuário encerradas',
+      sessions_closed: result.rowCount
+    });
+  } catch (error) {
+    console.error('Erro ao forçar logout:', error);
+    res.status(500).json({ error: 'Erro ao encerrar sessões do usuário' });
+  }
+};
+
 // Listar usuários online (apenas super_admin)
 // Considera online: atividade nos últimos 5 minutos
 export const getOnlineUsers = async (req, res) => {
