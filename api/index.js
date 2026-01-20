@@ -4553,22 +4553,24 @@ app.get('/api/analytics/overview', verifySuperAdmin, async (req, res) => {
     // Total de empresas
     const totalEmpresas = await pool.query('SELECT COUNT(*) FROM companies');
 
-    // Empresas ativas (status = active)
-    const empresasAtivas = await pool.query(
-      "SELECT COUNT(*) FROM companies WHERE subscription_status = 'active'"
-    );
+    // Empresas com assinatura ativa (via subscriptions)
+    const empresasAtivas = await pool.query(`
+      SELECT COUNT(DISTINCT s.company_id) FROM subscriptions s
+      WHERE s.status = 'active'
+    `);
 
     // Empresas em trial
-    const empresasTrial = await pool.query(
-      "SELECT COUNT(*) FROM companies WHERE subscription_status = 'trial'"
-    );
+    const empresasTrial = await pool.query(`
+      SELECT COUNT(DISTINCT s.company_id) FROM subscriptions s
+      WHERE s.status = 'trialing'
+    `);
 
     // Receita mensal (MRR) estimada
     const mrr = await pool.query(`
       SELECT COALESCE(SUM(p.price), 0) as mrr
-      FROM companies c
-      JOIN plans p ON c.plan_id = p.id
-      WHERE c.subscription_status = 'active'
+      FROM subscriptions s
+      JOIN plans p ON s.plan_id = p.id
+      WHERE s.status = 'active'
     `);
 
     // Novos clientes no mês
@@ -4579,9 +4581,9 @@ app.get('/api/analytics/overview', verifySuperAdmin, async (req, res) => {
 
     // Churn do mês (cancelamentos)
     const churnNoMes = await pool.query(`
-      SELECT COUNT(*) FROM companies
-      WHERE subscription_status IN ('cancelled', 'expired')
-      AND DATE_TRUNC('month', updated_at) = DATE_TRUNC('month', CURRENT_DATE)
+      SELECT COUNT(DISTINCT s.company_id) FROM subscriptions s
+      WHERE s.status IN ('cancelled', 'expired')
+      AND DATE_TRUNC('month', s.updated_at) = DATE_TRUNC('month', CURRENT_DATE)
     `);
 
     res.json({
@@ -4610,14 +4612,14 @@ app.get('/api/analytics/mrr', verifySuperAdmin, async (req, res) => {
 
     const result = await pool.query(`
       SELECT
-        TO_CHAR(DATE_TRUNC('month', c.created_at), 'YYYY-MM') as mes,
+        TO_CHAR(DATE_TRUNC('month', s.created_at), 'YYYY-MM') as mes,
         COALESCE(SUM(p.price), 0) as mrr
-      FROM companies c
-      LEFT JOIN plans p ON c.plan_id = p.id
-      WHERE c.subscription_status IN ('active', 'trial')
-        AND c.created_at >= $1
-      GROUP BY DATE_TRUNC('month', c.created_at)
-      ORDER BY DATE_TRUNC('month', c.created_at)
+      FROM subscriptions s
+      JOIN plans p ON s.plan_id = p.id
+      WHERE s.status IN ('active', 'trialing')
+        AND s.created_at >= $1
+      GROUP BY DATE_TRUNC('month', s.created_at)
+      ORDER BY DATE_TRUNC('month', s.created_at)
     `, [dataInicio]);
 
     res.json({
@@ -4645,7 +4647,7 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
         SELECT
           DATE_TRUNC('month', created_at) as mes,
           COUNT(*) as total_trials
-        FROM companies
+        FROM subscriptions
         WHERE created_at >= $1
         GROUP BY DATE_TRUNC('month', created_at)
       ),
@@ -4653,8 +4655,8 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
         SELECT
           DATE_TRUNC('month', created_at) as mes,
           COUNT(*) as conversoes
-        FROM companies
-        WHERE subscription_status = 'active'
+        FROM subscriptions
+        WHERE status = 'active'
           AND created_at >= $1
         GROUP BY DATE_TRUNC('month', created_at)
       )
@@ -4699,8 +4701,8 @@ app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
         SELECT
           DATE_TRUNC('month', created_at) as mes,
           COUNT(*) as total_ativos
-        FROM companies
-        WHERE subscription_status IN ('active', 'trial')
+        FROM subscriptions
+        WHERE status IN ('active', 'trialing')
           AND created_at >= $1
         GROUP BY DATE_TRUNC('month', created_at)
       ),
@@ -4708,8 +4710,8 @@ app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
         SELECT
           DATE_TRUNC('month', updated_at) as mes,
           COUNT(*) as cancelados
-        FROM companies
-        WHERE subscription_status IN ('cancelled', 'expired')
+        FROM subscriptions
+        WHERE status IN ('cancelled', 'expired')
           AND updated_at >= $1
         GROUP BY DATE_TRUNC('month', updated_at)
       )
@@ -4747,18 +4749,19 @@ app.get('/api/analytics/funil', verifySuperAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
-        subscription_status as status,
+        status,
         COUNT(*) as quantidade
-      FROM companies
-      GROUP BY subscription_status
+      FROM subscriptions
+      GROUP BY status
       ORDER BY
-        CASE subscription_status
-          WHEN 'trial' THEN 1
+        CASE status
+          WHEN 'trialing' THEN 1
           WHEN 'active' THEN 2
-          WHEN 'suspended' THEN 3
+          WHEN 'past_due' THEN 3
           WHEN 'cancelled' THEN 4
           WHEN 'expired' THEN 5
-          ELSE 6
+          WHEN 'pending' THEN 6
+          ELSE 7
         END
     `);
 
@@ -4782,46 +4785,44 @@ app.get('/api/analytics/funil', verifySuperAdmin, async (req, res) => {
 // Listar logs de webhook
 app.get('/api/webhooks/logs', verifySuperAdmin, async (req, res) => {
   try {
-    const { limit = 100, offset = 0, status, event_type } = req.query;
+    const { limit = 100, offset = 0, processed, event_type } = req.query;
 
     let query = `
-      SELECT
-        we.*,
-        c.nome as empresa_nome
-      FROM webhook_events we
-      LEFT JOIN companies c ON we.company_id = c.id
+      SELECT *
+      FROM webhook_events
       WHERE 1=1
     `;
     const params = [];
 
-    if (status && status !== 'all') {
-      params.push(status);
-      query += ` AND we.status = $${params.length}`;
+    // Filter by processed status (boolean)
+    if (processed !== undefined && processed !== 'all') {
+      params.push(processed === 'true');
+      query += ` AND processed = $${params.length}`;
     }
 
     if (event_type && event_type !== 'all') {
       params.push(event_type);
-      query += ` AND we.event_type = $${params.length}`;
+      query += ` AND event_type = $${params.length}`;
     }
 
     params.push(parseInt(limit));
     params.push(parseInt(offset));
-    query += ` ORDER BY we.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    query += ` ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
     const result = await pool.query(query, params);
 
     // Contar total
-    let countQuery = `SELECT COUNT(*) FROM webhook_events we WHERE 1=1`;
+    let countQuery = `SELECT COUNT(*) FROM webhook_events WHERE 1=1`;
     const countParams = [];
 
-    if (status && status !== 'all') {
-      countParams.push(status);
-      countQuery += ` AND we.status = $${countParams.length}`;
+    if (processed !== undefined && processed !== 'all') {
+      countParams.push(processed === 'true');
+      countQuery += ` AND processed = $${countParams.length}`;
     }
 
     if (event_type && event_type !== 'all') {
       countParams.push(event_type);
-      countQuery += ` AND we.event_type = $${countParams.length}`;
+      countQuery += ` AND event_type = $${countParams.length}`;
     }
 
     const countResult = await pool.query(countQuery, countParams);
@@ -4837,7 +4838,7 @@ app.get('/api/webhooks/logs', verifySuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar webhook logs:', error);
-    res.status(500).json({ error: 'Erro ao buscar logs de webhook' });
+    res.status(500).json({ error: 'Erro ao buscar logs de webhook', details: error.message });
   }
 });
 
@@ -4856,25 +4857,24 @@ app.post('/api/webhooks/reprocess/:id', verifySuperAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Evento não encontrado' });
     }
 
-    // Atualizar status para processing
+    // Marcar como processado e incrementar retry_count
     await pool.query(
-      "UPDATE webhook_events SET status = 'processing', updated_at = NOW() WHERE id = $1",
-      [id]
-    );
-
-    // Marcar como processado
-    await pool.query(
-      "UPDATE webhook_events SET status = 'processed', processed_at = NOW(), updated_at = NOW() WHERE id = $1",
+      `UPDATE webhook_events
+       SET processed = true,
+           processed_at = NOW(),
+           retry_count = retry_count + 1,
+           error_message = NULL
+       WHERE id = $1`,
       [id]
     );
 
     res.json({
       success: true,
-      message: 'Webhook marcado para reprocessamento'
+      message: 'Webhook marcado como reprocessado'
     });
   } catch (error) {
     console.error('Erro ao reprocessar webhook:', error);
-    res.status(500).json({ error: 'Erro ao reprocessar webhook' });
+    res.status(500).json({ error: 'Erro ao reprocessar webhook', details: error.message });
   }
 });
 
