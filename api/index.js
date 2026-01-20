@@ -4605,6 +4605,8 @@ app.get('/api/analytics/overview', verifySuperAdmin, async (req, res) => {
 app.get('/api/analytics/mrr', verifySuperAdmin, async (req, res) => {
   try {
     const periodo = parseInt(req.query.periodo) || 12;
+    const dataInicio = new Date();
+    dataInicio.setMonth(dataInicio.getMonth() - periodo);
 
     const result = await pool.query(`
       SELECT
@@ -4613,10 +4615,10 @@ app.get('/api/analytics/mrr', verifySuperAdmin, async (req, res) => {
       FROM companies c
       LEFT JOIN plans p ON c.plan_id = p.id
       WHERE c.subscription_status IN ('active', 'trial')
-        AND c.created_at >= CURRENT_DATE - INTERVAL '1 month' * $1
+        AND c.created_at >= $1
       GROUP BY DATE_TRUNC('month', c.created_at)
       ORDER BY DATE_TRUNC('month', c.created_at)
-    `, [periodo]);
+    `, [dataInicio]);
 
     res.json({
       success: true,
@@ -4635,6 +4637,8 @@ app.get('/api/analytics/mrr', verifySuperAdmin, async (req, res) => {
 app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
   try {
     const periodo = parseInt(req.query.periodo) || 12;
+    const dataInicio = new Date();
+    dataInicio.setMonth(dataInicio.getMonth() - periodo);
 
     const result = await pool.query(`
       WITH trials_por_mes AS (
@@ -4642,7 +4646,7 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
           DATE_TRUNC('month', created_at) as mes,
           COUNT(*) as total_trials
         FROM companies
-        WHERE created_at >= CURRENT_DATE - INTERVAL '1 month' * $1
+        WHERE created_at >= $1
         GROUP BY DATE_TRUNC('month', created_at)
       ),
       conversoes_por_mes AS (
@@ -4651,7 +4655,7 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
           COUNT(*) as conversoes
         FROM companies
         WHERE subscription_status = 'active'
-          AND created_at >= CURRENT_DATE - INTERVAL '1 month' * $1
+          AND created_at >= $1
         GROUP BY DATE_TRUNC('month', created_at)
       )
       SELECT
@@ -4666,7 +4670,7 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
       FROM trials_por_mes t
       LEFT JOIN conversoes_por_mes c ON t.mes = c.mes
       ORDER BY t.mes
-    `, [periodo]);
+    `, [dataInicio]);
 
     res.json({
       success: true,
@@ -4687,6 +4691,8 @@ app.get('/api/analytics/conversao', verifySuperAdmin, async (req, res) => {
 app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
   try {
     const periodo = parseInt(req.query.periodo) || 12;
+    const dataInicio = new Date();
+    dataInicio.setMonth(dataInicio.getMonth() - periodo);
 
     const result = await pool.query(`
       WITH ativos_por_mes AS (
@@ -4695,7 +4701,7 @@ app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
           COUNT(*) as total_ativos
         FROM companies
         WHERE subscription_status IN ('active', 'trial')
-          AND created_at >= CURRENT_DATE - INTERVAL '1 month' * $1
+          AND created_at >= $1
         GROUP BY DATE_TRUNC('month', created_at)
       ),
       cancelados_por_mes AS (
@@ -4704,7 +4710,7 @@ app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
           COUNT(*) as cancelados
         FROM companies
         WHERE subscription_status IN ('cancelled', 'expired')
-          AND updated_at >= CURRENT_DATE - INTERVAL '1 month' * $1
+          AND updated_at >= $1
         GROUP BY DATE_TRUNC('month', updated_at)
       )
       SELECT
@@ -4719,7 +4725,7 @@ app.get('/api/analytics/churn', verifySuperAdmin, async (req, res) => {
       FROM ativos_por_mes a
       FULL OUTER JOIN cancelados_por_mes c ON a.mes = c.mes
       ORDER BY COALESCE(a.mes, c.mes)
-    `, [periodo]);
+    `, [dataInicio]);
 
     res.json({
       success: true,
