@@ -360,7 +360,7 @@ app.get('/api/dashboard/estatisticas', async (req, res) => {
     if (role === 'vendedor' || role === 'gerente') {
       vendasPorEquipeQuery = `
         SELECT e.id as equipe_id, e.nome as equipe_nome,
-          COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_vendido,
+          COALESCE(SUM(CAST(NULLIF(c.valor_carta, '') AS NUMERIC)), 0) as total_vendido,
           COUNT(c.id) as total_vendas,
           COALESCE((SELECT SUM(m.valor_meta) FROM metas m WHERE m.equipe_id = e.id AND m.mes_referencia = $1 AND m.company_id = $3), 0) as meta_equipe
         FROM equipes e
@@ -373,7 +373,7 @@ app.get('/api/dashboard/estatisticas', async (req, res) => {
     } else {
       vendasPorEquipeQuery = `
         SELECT e.id as equipe_id, e.nome as equipe_nome,
-          COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_vendido,
+          COALESCE(SUM(CAST(NULLIF(c.valor_carta, '') AS NUMERIC)), 0) as total_vendido,
           COUNT(c.id) as total_vendas,
           COALESCE((SELECT SUM(m.valor_meta) FROM metas m WHERE m.equipe_id = e.id AND m.mes_referencia = $1 AND m.company_id = $2), 0) as meta_equipe
         FROM equipes e
@@ -416,14 +416,14 @@ app.get('/api/dashboard/estatisticas', async (req, res) => {
 
     // 4. Ticket Médio
     const ticketQuery = await pool.query(`
-      SELECT AVG(CAST(valor_carta AS REAL)) as ticket_medio
+      SELECT AVG(CAST(NULLIF(valor_carta, '') AS NUMERIC)) as ticket_medio
       FROM clientes WHERE etapa = 'fechado' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = $1
     `, [companyId]);
     const ticketMedio = parseFloat(ticketQuery.rows[0]?.ticket_medio) || 0;
 
     // 5. Pipeline Value
-    const pipelineNeg = await pool.query(`SELECT COALESCE(SUM(CAST(valor_carta AS REAL)), 0) as valor, COUNT(*) as qtd FROM clientes WHERE etapa = 'negociacao' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = $1`, [companyId]);
-    const pipelineProp = await pool.query(`SELECT COALESCE(SUM(CAST(valor_carta AS REAL)), 0) as valor, COUNT(*) as qtd FROM clientes WHERE etapa = 'proposta_enviada' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = $1`, [companyId]);
+    const pipelineNeg = await pool.query(`SELECT COALESCE(SUM(CAST(NULLIF(valor_carta, '') AS NUMERIC)), 0) as valor, COUNT(*) as qtd FROM clientes WHERE etapa = 'negociacao' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = $1`, [companyId]);
+    const pipelineProp = await pool.query(`SELECT COALESCE(SUM(CAST(NULLIF(valor_carta, '') AS NUMERIC)), 0) as valor, COUNT(*) as qtd FROM clientes WHERE etapa = 'proposta_enviada' AND valor_carta IS NOT NULL AND valor_carta != '' AND company_id = $1`, [companyId]);
 
     const pipelineValue = {
       em_negociacao: parseFloat(pipelineNeg.rows[0]?.valor) || 0,
@@ -435,7 +435,7 @@ app.get('/api/dashboard/estatisticas', async (req, res) => {
 
     // 6. Ranking Vendedores
     const rankingResult = await pool.query(`
-      SELECT u.id, u.nome, e.nome as equipe_nome, COUNT(c.id) as total_vendas, COALESCE(SUM(CAST(c.valor_carta AS REAL)), 0) as total_valor
+      SELECT u.id, u.nome, e.nome as equipe_nome, COUNT(c.id) as total_vendas, COALESCE(SUM(CAST(NULLIF(c.valor_carta, '') AS NUMERIC)), 0) as total_valor
       FROM usuarios u LEFT JOIN equipes e ON u.equipe_id = e.id
       LEFT JOIN clientes c ON c.vendedor_id = u.id AND c.etapa = 'fechado' AND c.company_id = $1
       WHERE u.role = 'vendedor' AND u.company_id = $1
