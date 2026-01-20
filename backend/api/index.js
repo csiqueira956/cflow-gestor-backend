@@ -2169,9 +2169,14 @@ app.put('/api/equipes/:id', async (req, res) => {
     const { id } = req.params;
     const { nome, descricao } = req.body;
 
+    // Validação de nome obrigatório
+    if (!nome || nome.trim().length < 2) {
+      return res.status(400).json({ error: 'Nome da equipe é obrigatório (mínimo 2 caracteres)' });
+    }
+
     const result = await pool.query(
       'UPDATE equipes SET nome = $1, descricao = $2, updated_at = NOW() WHERE id = $3 AND company_id = $4 RETURNING *',
-      [nome, descricao, id, decoded.company_id]
+      [nome.trim(), descricao, id, decoded.company_id]
     );
 
     if (result.rows.length === 0) {
@@ -2280,11 +2285,16 @@ app.put('/api/administradoras/:id', async (req, res) => {
     const { id } = req.params;
     const { nome, nome_contato, celular, comissionamento_recebido, comissionamento_pago } = req.body;
 
+    // Validação de nome obrigatório
+    if (!nome || nome.trim().length < 2) {
+      return res.status(400).json({ error: 'Nome da administradora é obrigatório (mínimo 2 caracteres)' });
+    }
+
     const result = await pool.query(
       `UPDATE administradoras SET nome = $1, nome_contato = $2, celular = $3,
        comissionamento_recebido = $4, comissionamento_pago = $5, updated_at = NOW()
        WHERE id = $6 AND company_id = $7 RETURNING *`,
-      [nome, nome_contato, celular, comissionamento_recebido, comissionamento_pago, id, decoded.company_id]
+      [nome.trim(), nome_contato, celular, comissionamento_recebido, comissionamento_pago, id, decoded.company_id]
     );
 
     if (result.rows.length === 0) {
@@ -4933,6 +4943,22 @@ app.post('/api/leads/website', async (req, res) => {
       });
     }
 
+    // Validação de formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        error: 'Formato de email inválido'
+      });
+    }
+
+    // Sanitizar nome (remover tags HTML)
+    const nomeSanitizado = nome.replace(/<[^>]*>/g, '').trim();
+    if (nomeSanitizado.length < 2) {
+      return res.status(400).json({
+        error: 'Nome deve ter pelo menos 2 caracteres'
+      });
+    }
+
     // Capturar IP e User Agent
     const ip_address = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const user_agent = req.headers['user-agent'];
@@ -4943,7 +4969,7 @@ app.post('/api/leads/website', async (req, res) => {
          utm_source, utm_medium, utm_campaign, ip_address, user_agent)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id, nome, email, created_at`,
-      [nome, email, telefone, empresa, tamanho_equipe, mensagem,
+      [nomeSanitizado, email, telefone, empresa, tamanho_equipe, mensagem,
        utm_source, utm_medium, utm_campaign, ip_address, user_agent]
     );
 

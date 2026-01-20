@@ -11,7 +11,7 @@ const { Pool } = pg;
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false
+    rejectUnauthorized: process.env.NODE_ENV === 'production'
   },
   // Configurações otimizadas para serverless
   max: 1, // Máximo de 1 conexão por função serverless
@@ -31,11 +31,13 @@ pool.on('error', (err) => {
   console.error('❌ Erro no pool do PostgreSQL:', err);
 });
 
-// Wrapper para queries com logs
+// Wrapper para queries com logs (sem expor dados sensíveis em produção)
 const query = async (text, params) => {
   try {
-    console.log('📝 Query completa:', text);
-    console.log('📊 Params:', JSON.stringify(params));
+    // Apenas log em desenvolvimento, sem expor parâmetros sensíveis
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('📝 Query:', text.substring(0, 100) + '...');
+    }
     const result = await pool.query(text, params);
     return result;
   } catch (error) {

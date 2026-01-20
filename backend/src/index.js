@@ -47,7 +47,8 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(null, true); // Temporariamente permitir todas as origens para debug
+      // Rejeitar origens não autorizadas
+      callback(new Error('Origem não permitida pelo CORS'));
     }
   },
   credentials: true
