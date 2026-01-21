@@ -34,6 +34,9 @@ app.use(helmet()); // Adiciona headers de segurança HTTP
 // CORS configurado para múltiplas origens
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:3000',
+  'https://cflowcrm.com.br',
+  'https://www.cflowcrm.com.br',
+  'https://app.cflowcrm.com.br',
   'https://cflow-website.vercel.app',
   'https://cflow-gestor.vercel.app',
   'http://localhost:5500',
